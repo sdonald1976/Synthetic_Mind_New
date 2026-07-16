@@ -4,6 +4,41 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 020 — Grounding: it learns names for what it sees. Slice 0 comes home.
+*2026-07-16 · Vision + Concept · `SyntheticMind.Mind.ConceptStore`, `GroundingTests`*
+
+The first grounding: bind a visual thing to a name. A script teaches five distinct moving "things" — rightward, downward, diagonal, orbit, blink — each shown with its label, then quizzes recognition on fresh, varied instances (new speed, phase, position, noise).
+
+```
+  taught 5 things, 8 examples each (script supplied the labels)
+    rightward  10/10     downward 10/10     diagonal 10/10     orbit 10/10     blink 10/10
+  overall grounding accuracy: 100%   (chance 20%)
+```
+
+### The result
+
+**It learns names for what it sees and recognizes new examples — 100% here.** This is Slice 0's founding idea ("teach it a thing, ask what it is"), abandoned early to go build the learning machinery, now closed on the real pipeline: a retina instead of a rented CLIP, a `ConceptStore` (the fast store / Concept System) doing the binding. A visual pattern is no longer just a recurring blob — it has a referent, a name.
+
+### What this is, architecturally
+
+Grounding is a **different operation** from the predictive hierarchy, and the project now has both — as the original architecture said it should. The hierarchy *learns to predict* a stream; the `ConceptStore` *binds* a representation to a symbol. And it grounds the **perception** (the retina summary), not the learned encoder — because categorical structure lives in perception (findings 008, 015, 016; a fourth confirmation). The binding is one-shot and cannot forget by construction (each name is its own running-mean prototype).
+
+### Honest limits — and they matter
+
+- **The five things are easy** (motion-distinct: horizontal vs vertical vs orbital vs whole-field). 100% is because they're well-separated, like speech-vs-music was. Visually *similar* things would be far lower — the coarse 8×8 retina can't tell fine detail apart.
+- **This is *label* grounding, not the hard kind.** A script *told* it the names. That's real grounding — the pattern now has a referent — but it is not the dream: a system that hears "dog", sees a dog, and binds them **itself**, with no script. That cross-modal, unsupervised binding is the genuine rung-4 wall, and it is still unbuilt.
+- The `ConceptStore` is nearest-prototype matching. It's honest and it works, but it's associative memory, not understanding.
+
+### Where the whole project stands
+
+Both halves of the founding architecture now exist and work: a **modality-agnostic predictive hierarchy** (learns any stream — audio 014, video 019) and a **Concept System** that grounds perception to names (020). Sound and vision run through the same learning code; a percept can be bound to a symbol. That is a real, working sketch of the thing the first message asked for — with every limit measured, not hidden.
+
+### Next — the real grounding
+
+Cross-modal, unsupervised: play a clip where a spoken word co-occurs with a seen thing (both discovered, neither labeled), and let the system bind the sound-unit to the visual-unit *on its own*. No script. That is meaning without a teacher — the hard rung, and now the concrete next target.
+
+---
+
 ## 019 — A second sense: it watches video, and the architecture is modality-agnostic
 *2026-07-16 · Vision · `SyntheticMind.Vision`, `VideoLearningTests`*
 
