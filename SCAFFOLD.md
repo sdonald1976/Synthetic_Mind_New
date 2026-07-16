@@ -143,3 +143,22 @@ The existing code — `ClipEncoder`, `FastStore`, `Eye` — belongs to the rejec
 `FastStore` might survive as an associative memory later. The rest shouldn't anchor anything. It's ~500 lines and about two hours of work.
 
 [FINDINGS.md](FINDINGS.md) 001 still stands, and it's now *evidence for this design*: a frozen encoder can only ever separate what its representation already separates. That's the ceiling this architecture exists to get past.
+
+---
+
+## 10. Rule formation — the reflex→rule bridge (far future, decided in principle)
+
+The system so far only forms **reflexes**: wordless leans in the weights. It knows *an*-before-a-vowel in its bones and could never state why. We want the second kind of knowing too — patterns it can promote into **rules** that override the reflexes. This is the neural→symbolic bridge, and it's where most architectures in this family die (see the OpenCog note, §4-adjacent history in ARCHITECTURE.md).
+
+The graveyard is one specific decision: **when does a hunch become a rule?** Too eager → superstition (coincidence carved into law). Too shy → permanent mush (never any rules at all). Nobody has a principled instant to pick.
+
+**Decision (2026-07-16): there is no instant. A rule pays rent.**
+
+- Noticing a pattern is cheap and commits to nothing.
+- Every candidate rule then stays on probation *forever*. When it's active and prediction succeeds, it gains confidence and gets to speak louder; when it's active and prediction still fails, it loses confidence.
+- A real pattern keeps paying rent and grows loud enough to boss the reflexes around. A coincidence stops paying almost immediately (it doesn't help predict the next case) and is quietly evicted — nobody ever *ruled* it wrong, it just stopped earning.
+- A "rule" is therefore only ever *a hunch that has paid rent so long we let it override the reflexes* — and it can be demoted the day it stops earning.
+
+**Why this fits:** it's the same engine as everything else — predict, check, adjust — turned on the machine's own hunches instead of on the input stream. No new mechanism, just a new target. Prediction error is already the currency; rent is paid in it.
+
+**Prerequisite, stated honestly:** this is far off. There are no stable hunches to promote until the reflex layer works *in a hierarchy* — i.e. not until the §8 abstraction question (finding 002/003's open thread) is answered. Recorded now so the principle survives; not to be built next.
