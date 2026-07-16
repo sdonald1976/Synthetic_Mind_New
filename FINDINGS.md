@@ -4,6 +4,43 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 004 — Stacking two learned units produces NO abstraction, and now we know why
+*2026-07-16 · Predictive hierarchy v1 · `SyntheticMind.Lab`, `TimescaleMonitor`*
+
+Findings 002 and 003 both ended on the same open question: stack two learned units — does the upper one, further from the input, discover something *slower* on its own (SCAFFOLD.md §3)? This is the first run that can actually answer it, because it's the first with an instrument for "slower": `TimescaleMonitor`, which measures lag-1 persistence (how many ticks the state holds before it substantially changes).
+
+The test signal is chosen so the answer would be visible: a bouncing ball has *fast* structure (position, moves every tick) and *slow* structure (direction, flips only at the walls, ~30 ticks). Emergent abstraction would show as level 1 running meaningfully slower than level 0 while staying informative.
+
+```
+  level 0 (near input)       err 9.94E-004   persistence 0.997 (~288 ticks)   rank 2.00/4
+  level 1 (far from input)   err 3.47E-003   persistence 0.997 (~293 ticks)   rank 2.00/4
+  verdict: same speed (293 vs 288 ticks), still informative → NO emergent abstraction
+```
+
+### The result
+
+**Level 1 runs at exactly the same timescale as level 0.** 288 vs 293 ticks is noise. Same rank, same persistence. The upper level faithfully re-represented the same signal at the same speed and discovered nothing slower. The thesis is unsupported — cleanly, measurably, not vaguely.
+
+(Note the process: the first verdict *printed* "abstraction emerged" because the check was a bare `>` and a 2% jitter tripped it. Fixed to require a 25% margin. A negative result that needed a bug removed before it would admit it was negative — worth remembering how easily the flattering version hides.)
+
+### Why — and this is the actual finding
+
+**The entire stack is linear.** The encoder is linear (PCA/Sanger), the predictor is linear, the readout is linear. A linear re-encoding of a smooth signal is just another smooth signal *at the same timescale* — there is no operation anywhere in the stack that could produce a slower one.
+
+But the ball's slow structure is **nonlinear**: "the direction flipped" is a threshold event (did position cross a wall?), not a linear combination of positions. Linear machinery cannot represent a threshold event, so it cannot extract the one slow feature that exists. The timescale is preserved because linearity *must* preserve it.
+
+So finding 004 converts the vague "hierarchy shows nothing" (002, 003) into something sharp: **the hierarchy shows nothing because it is linear, and the structure worth abstracting is nonlinear.** That is a diagnosis, not a shrug.
+
+### What it means for the design
+
+Abstraction was never going to emerge from stacking, no matter how many levels, as long as every level is a linear map. The missing ingredient is a **nonlinearity** — something that lets a unit respond to an *event* ("a bounce happened") rather than only to a linear blend of its input. This is not a tuning problem; it's a missing capability.
+
+### Next
+
+v2: give the unit a nonlinearity, the smallest one that could let level 1 represent a threshold event. Then re-run this exact experiment — same ball, same two instruments — and see whether level 1's persistence finally pulls away from level 0's. This experiment is now the permanent measuring stick for the whole thesis.
+
+---
+
 ## 003 — Learned state, and the collapse trapdoor, both demonstrated
 *2026-07-16 · Predictive hierarchy v1 · `SyntheticMind.Lab`, `RuleTests`*
 

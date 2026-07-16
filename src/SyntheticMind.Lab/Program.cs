@@ -65,22 +65,27 @@ foreach (var rule in learnedRules)
 }
 
 Console.WriteLine();
-Console.WriteLine("  ── two-level hierarchy on bouncing-ball ───────────────────");
+Console.WriteLine("  ── the thesis: two LEARNED units, does the top go slower? ──");
+Console.WriteLine();
+Console.WriteLine("  On the ball, position changes every tick (~fast) and direction flips only");
+Console.WriteLine("  at the walls (~30 ticks, slow). Abstraction = level 1 runs slower than");
+Console.WriteLine("  level 0 while staying informative (rank stays up). Nobody tells it to.");
 Console.WriteLine();
 
-// Level 2's input is level 1's published state (12-wide: a 3-deep delay line of 4-wide input).
-// Nobody tells level 2 what to represent. The question is whether being further from the input
-// makes it find something slower on its own — SCAFFOLD.md §3.
-var lower = new LinearDeltaRule(Width, historyLength: 3);
-var upper = new LinearDeltaRule(lower.StateWidth, historyLength: 3);
+// Each level is a learned-state unit. Level 1's input is level 0's published state — it never
+// sees the ball, only level 0's report of it. If the thesis holds, distance from the input alone
+// makes level 1 settle on something slower-moving.
+var lower = new LearnedPredictiveRule(Width, stateWidth: 4, drive: EncoderDrive.Variance);
+var upper = new LearnedPredictiveRule(lower.StateWidth, stateWidth: 4, drive: EncoderDrive.Variance);
 var hierarchy = new Hierarchy(lower, upper);
 
 var ball = new BouncingBallStream(Width);
 ball.Reset();
 
-var monitors = new[] { new CollapseMonitor(lower.StateWidth), new CollapseMonitor(upper.StateWidth) };
+const int Window = 4_000;   // wider window: persistence needs a long look to be stable
+var collapse = new[] { new CollapseMonitor(lower.StateWidth), new CollapseMonitor(upper.StateWidth) };
+var timescale = new[] { new TimescaleMonitor(lower.StateWidth), new TimescaleMonitor(upper.StateWidth) };
 var lateError = new float[2];
-const int Window = 1_000;
 
 for (var t = 0; t < Ticks; t++)
 {
@@ -90,11 +95,24 @@ for (var t = 0; t < Ticks; t++)
     for (var level = 0; level < ticks.Length; level++)
     {
         lateError[level] += ticks[level].SquaredError;
-        monitors[level].Record(ticks[level].State);
+        collapse[level].Record(ticks[level].State);
+        timescale[level].Record(ticks[level].State);
     }
 }
 
 for (var level = 0; level < hierarchy.Depth; level++)
-    Console.WriteLine($"  level {level}          late err {lateError[level] / Window:E2}   {monitors[level].Report()}");
+    Console.WriteLine(
+        $"  level {level} ({(level == 0 ? "near input" : "far from input")})   " +
+        $"err {lateError[level] / Window:E2}   {timescale[level].Report()}   {collapse[level].Report()}");
 
+// "Slower" has to mean MEANINGFULLY slower, not noise. Require level 1's characteristic
+// timescale to exceed level 0's by at least 25% — otherwise a 2% jitter reads as a discovery.
+var t0 = timescale[0].Report().CharacteristicTicks;
+var t1 = timescale[1].Report().CharacteristicTicks;
+var slower = t1 > t0 * 1.25f;
+var informative = !collapse[1].Report().Collapsed;
+Console.WriteLine();
+Console.WriteLine($"  verdict: level 1 {(slower ? "is MEANINGFULLY slower" : "runs at the same speed as")} level 0" +
+                  $" ({t1:F0} vs {t0:F0} ticks), {(informative ? "still informative" : "COLLAPSED")}  →  " +
+                  $"{(slower && informative ? "abstraction emerged" : "NO emergent abstraction this run")}");
 Console.WriteLine();
