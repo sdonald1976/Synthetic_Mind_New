@@ -5,6 +5,10 @@
     <ProjectReference Include="..\SyntheticMind.Audio\SyntheticMind.Audio.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>

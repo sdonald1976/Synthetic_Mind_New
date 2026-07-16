@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SyntheticMind.Mind\SyntheticMind.Mind.csproj" />
+    <ProjectReference Include="..\..\src\SyntheticMind.Audio\SyntheticMind.Audio.csproj" />
   </ItemGroup>
 
 </Project>

@@ -4,6 +4,39 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 012 — First real input: the hierarchy hears pitch through a cochlea
+*2026-07-16 · Audio · `SyntheticMind.Audio`, `AudioPipelineTests`, `SyntheticMind.Listen`*
+
+The synthetic streams did their job. This is the first real sensory input: sound, through a proper front-end, into the hierarchy that findings 001–011 built.
+
+**The cochlea** (`Cochlea`, `Fft`): waveform → mel-band energies. Own iterative radix-2 FFT (tested: impulse is flat, a pure tone spikes at its bin), Hann window, mel-spaced triangular filters, log compression. It's the audio retina (SCAFFOLD.md §4) — fixed, learns nothing, just decodes frequency. Verified: a low tone lights a low band, a high tone a high band, silence is silent, louder is larger.
+
+**The pipeline** (`AudioStream`): a real waveform whose pitch alternates (300 Hz ↔ 1200 Hz) rendered as actual samples, decoded by the cochlea, fed to a learned level 0. Result: **level 0 recovers the pitch at 0.79** — it hears which tone is playing, from samples, through the front-end. The whole machine works on real input.
+
+### Three lessons the real input taught (all the same lesson, really)
+
+Getting from "cochlea outputs 0.944 pitch signal" to "level 0 recovers it" took three fixes, and they rhyme with findings 008/011:
+
+1. **The encoder needs gain control.** Raw mel energies run ~1.1 with a big positive offset, far from the synthetic ±1. At the usual rate the Sanger encoder diverged to NaN (→ 0.000, the now-familiar signature). Added adaptive normalization to `AudioStream` — running per-band standardization, exactly what real cochleas/retinas do. Its time constant must be slow (0.001) or it cancels the signal it's normalizing — the mean-tracking trap yet again.
+2. **The learning rate must match the input scale.** Even normalized, the higher-dimensional mel input needed a much lower encoder rate (0.0001 vs 0.005). This keeps recurring; it should eventually be automatic (rate scaled by input variance), not hand-set.
+3. **Don't add nonlinearity you don't need.** Quad features were *essential* for the synthetic frequency task (a nonlinear latent) and actively *harmful* here (pitch is linear in the mel spectrum): 0.79 with none, 0.37 with 64. The right nonlinearity is task-dependent, not a default.
+
+### The live demo
+
+`SyntheticMind.Listen`: microphone (NAudio) → cochlea → level 0 → a live display of the mel spectrum and level 0's **surprise** (prediction error), which should spike on sound onsets and settle during silence. Built and compiling; unverified live (no mic in the build environment) — it's the first thing to run by hand.
+
+### Honest state
+
+This proves *integration*, not *understanding*. Level 0 hears pitch — a fast, linear feature. Whether the slow levels, over real speech, discover anything *meaningful* (phonemes, words, a speaker's rhythm) rather than just "pitch-change rate" is completely unknown and is the real question now. The plumbing is real; whether the water is worth drinking is untested.
+
+### Next
+
+- **Run the live demo** and watch surprise track real sound. First qualitative reality check.
+- **Real speech, real structure.** Feed recorded speech and ask whether the timescales the hierarchy surfaces line up with anything a human would name.
+- The recurring rate/scale fragility (lesson 2) is now a tax on every new input type — worth fixing at the source (self-scaling encoder) before too much is built on top.
+
+---
+
 ## 011 — Learn on top: a learned layer that uses the abstraction instead of erasing it
 *2026-07-16 · Predictive hierarchy · `SyntheticMind.Lab`, `FrontierTests`*
 
