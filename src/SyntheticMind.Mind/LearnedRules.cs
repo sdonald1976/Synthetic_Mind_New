@@ -204,22 +204,27 @@ public sealed class LearnedPredictiveRule : IUnitRule
         for (var i = 0; i < _k; i++) state[i] = TensorPrimitives.Dot<float>(_we[i], encode);
 
         // Train the predictor on (state that made the prediction) -> (state that actually arrived).
+        // Same NLMS scale-invariance as the encoder: normalize by the predictor input's energy so
+        // the predictor doesn't diverge to NaN when the state magnitude shifts with a new input type.
         if (_primed)
         {
+            var predRate = _predRate / (TensorPrimitives.Dot<float>(_stateThatPredicted, _stateThatPredicted) + 1f);
             for (var i = 0; i < _k; i++)
             {
                 var stateError = state[i] - _predictedNextState[i];
-                var scale = _predRate * stateError;
+                var scale = predRate * stateError;
                 for (var j = 0; j < _k; j++) _wp[i][j] += scale * _stateThatPredicted[j];
                 _bp[i] += scale;
             }
         }
 
-        // Train the readout to reconstruct the current input frame from the current state.
+        // Train the readout to reconstruct the current input frame from the current state, likewise
+        // normalized by the state's energy.
+        var readRate = _readRate / (TensorPrimitives.Dot<float>(state, state) + 1f);
         for (var i = 0; i < _d; i++)
         {
             var reconstruction = TensorPrimitives.Dot<float>(_wd[i], state) + _bd[i];
-            var scale = _readRate * (input[i] - reconstruction);
+            var scale = readRate * (input[i] - reconstruction);
             for (var j = 0; j < _k; j++) _wd[i][j] += scale * state[j];
             _bd[i] += scale;
         }

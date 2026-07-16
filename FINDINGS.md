@@ -4,6 +4,49 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 014 — It learns to predict real speech, on the fly, in eleven seconds
+*2026-07-16 · Audio · `SyntheticMind.Audio`, `SyntheticMind.Listen`*
+
+Fed a real recording — JFK's "ask not what your country can do for you" (whisper.cpp's `jfk.wav`, 16 kHz, 11 s) — through the cochlea into level 0, and watched its surprise (prediction error) over time. Added `WavReader` (any 16-bit / float WAV, any rate/channels → mono, resampled) so any file off the internet plays.
+
+```
+   time   loudness              surprise
+   0.0s  #                     ###
+   0.4s  #######               ########      ← very surprised at first
+   0.8s  ##############        ###
+   1.6s  ##########            #
+   2.0s  (silence)             (nothing)     ← pause after "Americans"
+   7.2s  #######               #             ← same loudness, barely surprised
+   mean surprise: 1.034 (first third) → 0.309 (last third)
+```
+
+### Three things, and they're the whole thesis on real input
+
+1. **It learned, unsupervised, in eleven seconds.** Mean surprise fell 3.3× across the clip. No labels, no training phase — it predicted the next moment of sound and got steadily less wrong.
+2. **Surprise is novelty, not loudness.** 0.4 s and 7.2 s are *equally loud* (#######), but surprise went from ######## to #. The model reacts to the unexpected, not the loud — which is exactly what a predictive learner should do, and what a volume meter could never do.
+3. **Silence is silent.** The pause after "Americans" and the other gaps show zero surprise — correctly nothing to predict.
+
+The WAV reader and cochlea also just work: the loudness column traces the sentence's rhythm, silences and all.
+
+### What this is, and what it is not
+
+**Is:** the "learns on the fly, no labels, from raw input" claim, demonstrated on real sound rather than a synthetic stream. The plumbing (findings 001–013) carries real audio end to end.
+
+**Is not:** understanding. This is *level 0* — the fast timescale. It learned the low-level statistics of this speaker's spectrum well enough to predict them. It did **not** learn phonemes, words, or meaning, and nothing here claims it did. Whether the slow levels, over much more speech, surface anything a human would name is still the open question — now askable with real data.
+
+Two honest caveats: some of the early surprise is a cold start (the model has literally never heard anything), so the 3.3× includes warmup, not only speech-adaptation — though surprise falling to near-zero during *loud late speech* is genuine adaptation, not warmup. And it's one 11-second clip of one speaker.
+
+### Getting here fixed a real bug
+
+Surprise came out **NaN** at first: finding 013 made the *encoder* scale-free, but the readout and predictor inside the unit still had fixed rates and diverged on audio. Extended the same NLMS normalization to them. All 34 tests pass.
+
+### Next
+
+- **More audio, longer.** Minutes of speech or music, and watch whether a `TemporalLevel` over level 0 tracks anything structural (phrases, sections, speaker).
+- **Run the live mic** (`dotnet run --project src/SyntheticMind.Listen`) — still the unrun real-world check; the file path (`-- file.wav`) is the same pipeline you can now drive deterministically.
+
+---
+
 ## 013 — Self-scaling encoder: one learning rate for every input
 *2026-07-16 · Predictive hierarchy · `SyntheticMind.Mind`, whole suite*
 

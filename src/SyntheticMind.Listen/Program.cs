@@ -2,90 +2,115 @@ using NAudio.Wave;
 using SyntheticMind.Audio;
 using SyntheticMind.Mind;
 
-// Live microphone → cochlea → hierarchy. Speak, and watch the model hear.
+// Listen to sound → cochlea → hierarchy.
+//   dotnet run                       → live microphone
+//   dotnet run -- path/to/file.wav   → audition a WAV file and report what the model does
 //
-// The two things on screen:
-//   SPECTRUM  — the cochlea's mel bands right now (what frequencies are present)
-//   SURPRISE  — how wrong level 0's prediction of this instant was. It spikes on changes
-//               (a new sound, a word onset) and settles during steady sound or silence.
-//               That spike is the learning signal — the model being wrong, which is how it learns.
+// SURPRISE is level 0's prediction error — how wrong its guess of this instant was. It spikes on
+// the unexpected (a new sound, an onset) and settles as the model learns to predict what it hears.
 
 const int SampleRate = 16000;
-const int Hop = 160;          // 100 mel-frames per second
+const int Hop = 160;      // 100 mel-frames per second
 const int MelBands = 20;
 
-Console.WriteLine();
-Console.WriteLine("  SyntheticMind — listening");
-Console.WriteLine("  make some noise (talk, hum, tap). Ctrl+C to stop.");
-Console.WriteLine();
+var cochlea = new Cochlea(SampleRate, fftSize: 512, melBands: MelBands);
+// No quad features (pitch/timbre are linear in the mel spectrum). Default rate — the encoder is
+// scale-free (NLMS, finding 013), so no per-input tuning.
+var level0 = new Unit(new LearnedPredictiveRule(MelBands, stateWidth: 8, history: 8, quadraticFeatures: 0));
 
-// --- microphone capture: NAudio pushes buffers; we queue the samples for the pull-based stream ---
-var sampleQueue = new Queue<float>();
-var queueLock = new object();
+if (args.Length > 0 && args[0].EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+    AuditionFile(args[0], cochlea, level0);
+else
+    LiveMicrophone(cochlea, level0);
+return;
 
-using var mic = new WaveInEvent
+// ---- WAV file mode: run the clip and show surprise vs. loudness over time --------------------
+static void AuditionFile(string path, Cochlea cochlea, Unit level0)
 {
-    WaveFormat = new WaveFormat(SampleRate, 16, 1),   // 16 kHz, 16-bit, mono
-    BufferMilliseconds = 20,
-};
+    var samples = WavReader.ReadMono(path, SampleRate);
+    Console.WriteLine($"\n  {Path.GetFileName(path)} — {samples.Length / (float)SampleRate:F1}s at {SampleRate} Hz\n");
 
-mic.DataAvailable += (_, e) =>
-{
-    lock (queueLock)
-        for (var i = 0; i + 1 < e.BytesRecorded; i += 2)
-            sampleQueue.Enqueue(BitConverter.ToInt16(e.Buffer, i) / 32768f);
-};
+    var pos = 0;
+    float[] Pull()
+    {
+        var block = new float[Hop];
+        for (var i = 0; i < Hop && pos < samples.Length; i++) block[i] = samples[pos++];
+        return block;
+    }
+    var audio = new AudioStream(Pull, cochlea, Hop);
 
-float[] PullSamples()
+    var frames = samples.Length / Hop;
+    var surprise = new float[frames];
+    var loudness = new float[frames];
+    for (var t = 0; t < frames; t++)
+    {
+        var rms = 0f;
+        for (var i = 0; i < Hop && t * Hop + i < samples.Length; i++) { var s = samples[t * Hop + i]; rms += s * s; }
+        loudness[t] = MathF.Sqrt(rms / Hop);
+        surprise[t] = level0.Observe(audio.Next()).SquaredError;
+    }
+
+    var maxS = surprise.DefaultIfEmpty(1).Max();
+    var maxL = loudness.DefaultIfEmpty(1).Max();
+    const int bucket = 40;   // ~0.4s
+    Console.WriteLine("  time   loudness              surprise (prediction error)");
+    for (var b = 0; b * bucket < frames; b++)
+    {
+        float s = 0, l = 0; var n = 0;
+        for (var i = b * bucket; i < (b + 1) * bucket && i < frames; i++) { s += surprise[i]; l += loudness[i]; n++; }
+        s /= n; l /= n;
+        Console.WriteLine($"  {b * bucket / 100f,4:F1}s  {new string('#', (int)(l / maxL * 20)),-20}  {new string('#', (int)(s / maxS * 30)),-30}");
+    }
+
+    var third = frames / 3;
+    float early = 0, late = 0;
+    for (var i = 0; i < third; i++) early += surprise[i];
+    for (var i = frames - third; i < frames; i++) late += surprise[i];
+    Console.WriteLine($"\n  mean surprise fell from {early / third:F3} (first third) to {late / third:F3} (last third)");
+    Console.WriteLine("  — the model learned to predict this sound as it listened.\n");
+}
+
+// ---- live microphone mode --------------------------------------------------------------------
+static void LiveMicrophone(Cochlea cochlea, Unit level0)
 {
-    // Hand the stream one hop of samples, waiting briefly if the mic hasn't delivered enough yet.
+    Console.WriteLine("\n  SyntheticMind — listening (make some noise; Ctrl+C to stop)\n");
+
+    var queue = new Queue<float>();
+    var gate = new object();
+    using var mic = new WaveInEvent { WaveFormat = new WaveFormat(SampleRate, 16, 1), BufferMilliseconds = 20 };
+    mic.DataAvailable += (_, e) =>
+    {
+        lock (gate)
+            for (var i = 0; i + 1 < e.BytesRecorded; i += 2)
+                queue.Enqueue(BitConverter.ToInt16(e.Buffer, i) / 32768f);
+    };
+
+    float[] Pull()
+    {
+        while (true)
+        {
+            lock (gate)
+                if (queue.Count >= Hop)
+                {
+                    var block = new float[Hop];
+                    for (var i = 0; i < Hop; i++) block[i] = queue.Dequeue();
+                    return block;
+                }
+            Thread.Sleep(2);
+        }
+    }
+    var audio = new AudioStream(Pull, cochlea, Hop);
+
+    mic.StartRecording();
+    var frame = 0;
+    var smoothed = 0f;
+    const string ramp = " ▁▂▃▄▅▆▇█";
     while (true)
     {
-        lock (queueLock)
-        {
-            if (sampleQueue.Count >= Hop)
-            {
-                var block = new float[Hop];
-                for (var i = 0; i < Hop; i++) block[i] = sampleQueue.Dequeue();
-                return block;
-            }
-        }
-        Thread.Sleep(2);
+        var mel = audio.Next();
+        smoothed += 0.3f * (level0.Observe(mel).SquaredError - smoothed);
+        if (++frame % 5 != 0) continue;
+        var spectrum = string.Concat(mel.Select(v => ramp[Math.Clamp((int)((v * 0.4f + 0.5f) * 8), 0, 8)]));
+        Console.Write($"\r  {spectrum}   surprise {smoothed,6:F3} {new string('#', Math.Clamp((int)(smoothed * 40), 0, 30)),-30}");
     }
 }
-
-// --- the pipeline: cochlea → learned level 0 → a slow level ---
-var cochlea = new Cochlea(SampleRate, fftSize: 512, melBands: MelBands);
-var audio = new AudioStream(PullSamples, cochlea, Hop);
-// No quad features (pitch/timbre are linear in the mel spectrum). Default rate — NLMS normalization
-// (finding 013) makes the encoder scale-free, so no hand-tuning for audio.
-var level0 = new Unit(new LearnedPredictiveRule(MelBands, stateWidth: 8, history: 8, quadraticFeatures: 0));
-var slow = new TemporalLevel(inputWidth: 8, stride: 25, integratorRate: 0.05f);  // ~quarter-second summary
-
-mic.StartRecording();
-
-var frame = 0;
-var smoothedSurprise = 0f;
-const string ramp = " ▁▂▃▄▅▆▇█";
-
-while (true)
-{
-    var mel = audio.Next();
-    var tick = level0.Observe(mel);
-    slow.Observe(tick.State);
-    frame++;
-
-    // Prediction error = surprise. Smooth it a touch so the display isn't jittery.
-    smoothedSurprise += 0.3f * (tick.SquaredError - smoothedSurprise);
-
-    if (frame % 5 != 0) continue;   // redraw ~20x/second
-
-    var spectrum = string.Concat(mel.Select(v =>
-        ramp[Math.Clamp((int)(Normalize(v) * (ramp.Length - 1)), 0, ramp.Length - 1)]));
-
-    var surpriseBar = new string('#', Math.Clamp((int)(smoothedSurprise * 40f), 0, 30));
-    Console.Write($"\r  {spectrum}   surprise {smoothedSurprise,6:F3} {surpriseBar,-30}");
-}
-
-// Map a normalized mel value (roughly zero-mean, unit-ish) into [0,1] for the display ramp.
-static float Normalize(float v) => Math.Clamp(v * 0.4f + 0.5f, 0f, 1f);
