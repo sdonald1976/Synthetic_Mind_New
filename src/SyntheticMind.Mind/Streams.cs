@@ -97,3 +97,71 @@ public sealed class BouncingBallStream : IStream
         _vy = SpeedY;
     }
 }
+
+/// <summary>
+/// A fast oscillation whose FREQUENCY is set by a slow hidden regime that flips every few hundred
+/// ticks. This is the stream the bouncing ball wasn't: it has genuine two-timescale structure with
+/// a slow *latent cause*, which is the only setting where "does a higher level discover something
+/// slower?" is even a fair question (finding 005).
+///
+/// What you observe: sin(phase) and cos(phase) — a fast wiggle, changing every tick.
+/// What's hidden: the regime (0 or 1), which sets the wiggle's speed and changes rarely.
+///
+/// The regime is NOT in the observation. Inferring it requires watching the wiggle over time —
+/// you cannot read a frequency from a single instant. So a level that comes to represent the
+/// regime has genuinely abstracted a slow hidden cause it was never shown. <see cref="Regime"/>
+/// exposes the ground truth for MEASUREMENT ONLY; it is never fed to the model.
+/// </summary>
+public sealed class RegimeOscillatorStream : IStream
+{
+    private const float SlowFreq = 0.50f;   // radians/tick in regime 0 (~12-tick cycle)
+    private const float FastFreq = 1.20f;   // radians/tick in regime 1 (~5-tick cycle)
+    private const int MinDwell = 150;       // regimes last this long, at least — the slow timescale
+    private const int MaxDwell = 350;
+
+    private readonly int _width;
+    private readonly int _seed;
+    private Random _random = null!;
+    private float _phase;
+    private int _regime;
+    private int _ticksLeft;
+
+    public RegimeOscillatorStream(int width = 4, int seed = 1)
+    {
+        _width = width;
+        _seed = seed;
+        Reset();
+    }
+
+    public string Name => "regime-oscillator";
+    public int Width => _width;
+
+    /// <summary>The hidden slow latent, 0 or 1. For measuring abstraction — never an input.</summary>
+    public float Regime => _regime;
+
+    public float[] Next()
+    {
+        if (_ticksLeft <= 0)
+        {
+            _regime = 1 - _regime;
+            _ticksLeft = _random.Next(MinDwell, MaxDwell);
+        }
+        _ticksLeft--;
+
+        _phase += _regime == 0 ? SlowFreq : FastFreq;
+
+        var v = new float[_width];
+        v[0] = MathF.Sin(_phase);
+        if (_width > 1) v[1] = MathF.Cos(_phase);
+        // channels 2+ stay zero: distractor dimensions, as ever
+        return v;
+    }
+
+    public void Reset()
+    {
+        _random = new Random(_seed);
+        _phase = 0f;
+        _regime = 0;
+        _ticksLeft = _random.Next(MinDwell, MaxDwell);
+    }
+}

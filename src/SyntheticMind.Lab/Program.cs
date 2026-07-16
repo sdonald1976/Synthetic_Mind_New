@@ -116,3 +116,73 @@ Console.WriteLine($"  verdict: level 1 {(slower ? "is MEANINGFULLY slower" : "ru
                   $" ({t1:F0} vs {t0:F0} ticks), {(informative ? "still informative" : "COLLAPSED")}  →  " +
                   $"{(slower && informative ? "abstraction emerged" : "NO emergent abstraction this run")}");
 Console.WriteLine();
+
+Console.WriteLine("  ── the FAIR test: a stream with a real hidden slow cause ──");
+Console.WriteLine();
+Console.WriteLine("  A fast wiggle whose frequency is secretly switched by a slow hidden regime.");
+Console.WriteLine("  The regime is never shown to the model. Abstraction = a level's state comes");
+Console.WriteLine("  to encode that hidden regime. We score by correlating each level's state with");
+Console.WriteLine("  the ground-truth regime (used ONLY for scoring, never as input).");
+Console.WriteLine();
+
+Console.WriteLine("  Two encoder objectives, head to head. Variance chases the loudest structure;");
+Console.WriteLine("  slowness chases the most sluggish. Both get nonlinear features and long history.");
+Console.WriteLine();
+
+// 2-channel stream (sin, cos) — no dead padding, so the slowness rule can't cheat by latching
+// onto a constant dimension that's slow only because it never moves.
+const int OscWidth = 2;
+
+foreach (var drive in new[] { EncoderDrive.Variance, EncoderDrive.Slowness })
+{
+    var regimeStream = new RegimeOscillatorStream(OscWidth);
+    regimeStream.Reset();
+
+    var lo = new LearnedPredictiveRule(OscWidth, stateWidth: 4, drive: drive, history: 16, quadraticFeatures: 64);
+    var hi = new LearnedPredictiveRule(lo.StateWidth, stateWidth: 4, drive: drive, history: 8, quadraticFeatures: 64);
+    var stack = new Hierarchy(lo, hi);
+
+    var stateLog = new[] { new List<float[]>(), new List<float[]>() };
+    var regimeLog = new List<float>();
+
+    for (var t = 0; t < Ticks; t++)
+    {
+        var regimeNow = regimeStream.Regime;   // read BEFORE Next() advances it, matching the frame
+        var ticks = stack.Observe(regimeStream.Next());
+        if (t < Ticks - Window) continue;
+
+        regimeLog.Add(regimeNow);
+        for (var level = 0; level < ticks.Length; level++) stateLog[level].Add(ticks[level].State);
+    }
+
+    var loCorr = MaxAbsCorrelation(stateLog[0], regimeLog);
+    var hiCorr = MaxAbsCorrelation(stateLog[1], regimeLog);
+    Console.WriteLine($"  {lo.Name,-22} level 0 corr {loCorr:F3}   level 1 corr {hiCorr:F3}   " +
+                      $"→ {(Math.Max(loCorr, hiCorr) > 0.5f ? "REGIME FOUND" : "regime not found")}");
+}
+Console.WriteLine();
+
+// Max over state dimensions of |Pearson correlation| between that dimension and the regime.
+static float MaxAbsCorrelation(List<float[]> states, List<float> target)
+{
+    if (states.Count == 0) return 0f;
+    var width = states[0].Length;
+    var best = 0f;
+    for (var d = 0; d < width; d++)
+    {
+        double sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+        var n = states.Count;
+        for (var i = 0; i < n; i++)
+        {
+            double x = states[i][d], y = target[i];
+            sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y;
+        }
+        var cov = sxy - sx * sy / n;
+        var vx = sxx - sx * sx / n;
+        var vy = syy - sy * sy / n;
+        if (vx <= 1e-12 || vy <= 1e-12) continue;
+        var r = (float)Math.Abs(cov / Math.Sqrt(vx * vy));
+        if (r > best) best = r;
+    }
+    return best;
+}

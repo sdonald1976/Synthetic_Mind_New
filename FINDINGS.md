@@ -4,6 +4,43 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 005 — A unit abstracts a hidden slow cause it was never shown (and a wrong turn along the way)
+*2026-07-16 · Predictive hierarchy v1 · `SyntheticMind.Lab`, `RegimeTests`*
+
+Finding 004 said the ball had no slow latent to discover, so no model could show abstraction on it. This finding builds the missing ingredient — a stream *with* a genuine hidden slow cause — and asks whether a unit can recover it.
+
+**The stream** (`RegimeOscillatorStream`): a fast wiggle (sin/cos) whose frequency is secretly switched by a slow hidden "regime" every ~150–350 ticks. The regime is never an input. A frequency cannot be read from a single instant, so recovering it is genuine abstraction of an unseen cause. Success is measured by correlating a unit's state with the ground-truth regime (used for scoring only).
+
+### The result
+
+```
+                       recovers hidden regime?
+  linear unit                 corr 0.003     blind
+  nonlinear unit (products)   corr 0.766     FOUND
+  + slowness objective        corr 0.864     FOUND (slightly better)
+```
+
+**A single unit with nonlinear product features recovers the hidden regime** (0.77–0.86 correlation with a cause it never saw), where a linear unit gets nothing (0.003). The nonlinearity is the ingredient that matters — finding 004's instinct was right. Products across time let the encoder form frequency-sensitive features; a linear map structurally cannot, so it stays blind.
+
+### The wrong turn — recorded because it's instructive
+
+Mid-investigation I concluded the *opposite*: that nonlinearity didn't help and the real blocker was the encoder's objective (variance vs. slowness). That conclusion was **wrong, and it came from a confound.** The first nonlinear test ran on a 4-channel stream with two dead (always-zero) padding channels. The random product features kept landing on those dead channels, producing mostly-zero features, so the nonlinearity looked useless (corr 0.008). Cleaning the stream to 2 live channels, a controlled linear-vs-nonlinear probe settled it: 0.003 → 0.766. The nonlinearity works; the dead channels had masked it.
+
+Lesson kept: a negative result on a confounded setup nearly overturned a correct conclusion. The isolating probe (change one thing, hold the rest) is what caught it.
+
+### Two honest limits
+
+1. **It's found at level 0, not up the hierarchy.** This validates "a nonlinear unit with a long enough temporal window can abstract a hidden slow cause" — a real and wanted capability. It does *not* validate the SCAFFOLD.md §3 thesis that *stacking* makes higher levels discover slower structure. The bottom unit already had the reach; level 1 added nothing here (corr ~0). That thesis is still open.
+2. **The slowness objective helped only marginally (0.864 vs 0.766) and isn't necessary for this task.** It also exposed an instrument limitation: `CollapseMonitor`'s participation-ratio test gives a false "collapsed" for a slowness encoder, because slowness deliberately produces low-variance features. Anti-collapse measurement is objective-specific. The honest health check for slowness is direct: does the state carry information (recover the regime)? It does.
+
+### Next
+
+Two threads, either valid:
+- **Push on the hierarchy thesis directly:** can stacking be made to matter — e.g., a level that pools over time (a slower clock) so level 1 *must* see longer timescales than level 0? Right now level 0 does all the work.
+- **Consolidate the win:** a nonlinear unit can now abstract a hidden cause. That's a genuine building block. It may be worth making it robust before chasing depth.
+
+---
+
 ## 004 — Stacking two learned units produces NO abstraction, and now we know why
 *2026-07-16 · Predictive hierarchy v1 · `SyntheticMind.Lab`, `TimescaleMonitor`*
 
