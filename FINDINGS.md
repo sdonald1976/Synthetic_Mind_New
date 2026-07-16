@@ -4,6 +4,40 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 021 — Cross-modal grounding: meaning without a teacher (rung 4)
+*2026-07-16 · Cross-modal · `SyntheticMind.Mind.CrossModalStore`, `CrossModalTests`*
+
+The wall we kept naming: bind a *heard* thing to a *seen* thing with **no labels** — only co-occurrence in time. Five objects, each a distinct sound (tone pair) paired with a distinct sight (moving shape). They're presented together and a `CrossModalStore` binds each co-occurring pair. Nobody says what anything is; being simultaneous is the whole signal.
+
+```
+  bound 60 co-occurring sound+sight episodes (no labels)
+  HEAR the sound → recall the right SIGHT:  100%   (chance 20%)
+  SEE  the sight → recall the right SOUND:  100%   (chance 20%)
+```
+
+### The result
+
+**It listened and watched at the same time, and grounded one sense in the other, unsupervised.** After binding, hearing a sound recalls the correct sight and seeing a sight recalls the correct sound — both perfectly on this set. The system learned that *this noise goes with that look*, from nothing but their happening together. That is the closest the project has come to **meaning without a teacher** — the rung-4 target named as far back as the "how would it learn English" conversation.
+
+Mechanically it's the fast store / Concept System one more time, now spanning two senses: novelty-gated prototypes, each holding a sound signature and a sight signature, recalled cross-modally by nearest prototype in one modality. The whole architecture from the first message is now present and connected: modality-agnostic predictive hierarchy (014, 019), perceptual grounding (020), and cross-sensory binding (021).
+
+### The honest limits — and they are the whole distance to real meaning
+
+- **Five distinct objects is the easy case.** 100% because each object is unmistakable in *both* senses. Similar objects, or many of them, would fall off hard — the coarse retina and 20-band cochlea can't resolve fine distinctions.
+- **The co-occurrence was clean.** Exactly one object per episode, sound and sight perfectly aligned. Real co-occurrence is a mess: many things present at once, sounds without sights, referential ambiguity (the child hears "dog" — is it the animal, the fur, the barking?). That ambiguity is most of what makes real grounding hard, and none of it is here.
+- **It bound *representations*, not *concepts*.** It knows sound-A goes with sight-A. It does not know either is a "dog", cannot generalize to a novel view, and has no notion of the thing beyond the two signatures. This is associative memory across senses — a real and necessary piece of meaning, but not the whole of it.
+
+### Where this leaves the project
+
+Every rung has now been touched: sound/vision learning (form), segmentation and unit discovery (structure), naming (label grounding), and cross-modal binding (meaning without a teacher, in the clean case). The mechanism is real and the pieces connect. What separates this from *understanding* is exactly the mess it was spared — ambiguity, scale, generalization, and the sheer amount of grounded experience a mind needs. Those are not the next feature; they're the real frontier, and naming them honestly is the point.
+
+### Next
+
+- **Messier co-occurrence:** sounds without sights, two things at once, weak/partial pairing. Does binding survive noise, or does it need a cleaner signal than the world gives?
+- **The live version:** mic + webcam together (needs a camera), so it grounds what's actually in the room — the original companion vision.
+
+---
+
 ## 020 — Grounding: it learns names for what it sees. Slice 0 comes home.
 *2026-07-16 · Vision + Concept · `SyntheticMind.Mind.ConceptStore`, `GroundingTests`*
 
