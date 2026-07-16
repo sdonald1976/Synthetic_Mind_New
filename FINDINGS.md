@@ -4,6 +4,39 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 017 — Tier 2: it scales and discovers pure units, but over-splits the count
+*2026-07-16 · Audio · `SyntheticMind.Audio`, `SyllableCountTests`*
+
+Tier 2 raised the bar three ways: **20** unit types (not 5), **per-instance variation** (±6% formant jitter, so no two instances are identical), and — the real new challenge — **the count is not given**. Instead of k-means with k=5, novelty-gated online prototypes (the Slice-0 fast store: near an existing prototype → merge; novel enough → spawn a new one) decide how many units exist.
+
+```
+  segmentation recall            0.80   (still finds most boundaries, now over 20 varied units)
+  prototype purity               ~0.75  (each prototype maps mostly to one true type)
+  discovered count vs true (20):
+     vigilance 0.15 → 140    0.25 → 90    0.35 → 59    0.45 → 43    0.55 → 28
+  after consolidation (merge): 34–45 units at purity ~0.72–0.75
+```
+
+### What held
+
+**The mechanism scales.** Segmentation still works at 20 units (0.80), and the prototypes it forms are **pure** — each is mostly a single true type (~0.75). More units and real within-unit variation did not break it. The units it finds are real.
+
+### What didn't
+
+**It over-splits, and the exact count is genuinely ambiguous.** Every setting finds *more* than 20 prototypes (28–140 depending on the vigilance knob). Each true syllable fragments into ~2 pure sub-prototypes that won't merge — because the ±6% jitter makes within-type spread comparable to some between-type gaps at 20-band mel resolution, so merging them would also merge *different* types (purity falls). Consolidation (a merge pass — the "sleep" idea from the original plan) helps (123 → 34) but can't cleanly recover 20 without trading purity away.
+
+**This is not a bug — it's a real property of unsupervised discovery.** "How many units are there" is ill-posed once within-class variation approaches between-class variation. There is no single correct count without fixing a granularity; the vigilance parameter *is* that granularity, and it trades count against purity along a smooth curve. Reporting the curve is more honest than tuning the stimulus until a pretty "20" falls out.
+
+### The knob has a name
+
+The vigilance/merge threshold is exactly ART's vigilance parameter (Grossberg) and consolidation is exactly the "sleep" step from PLAN.md — both arrived at from need, not theory. The count-vs-granularity tension is the same one every clustering method faces; the honest move is to expose it, not hide it.
+
+### Next
+
+- **Tier 3: real speech.** Point the segmenter at `jfk.wav` and see where the boundaries land against the actual words. Real speech has coarticulation and no clean stationary segments — this is where the mechanism meets reality, and the thing worth being curious about.
+
+---
+
 ## 016 — Unsupervised sound-unit discovery, Tier 1: the pieces show up
 *2026-07-16 · Audio · `SyntheticMind.Audio`, `SyllableDiscoveryTests`*
 
