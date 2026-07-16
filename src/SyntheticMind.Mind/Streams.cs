@@ -258,3 +258,76 @@ public sealed class NestedRegimeStream : IStream
         _metaTicksLeft = _random.Next(MetaMinDwell, MetaMaxDwell);
     }
 }
+
+/// <summary>
+/// Three nested timescales, to test whether the hierarchy COMPOSES (finding 010): does a slow
+/// level stacked on a slow level recover an even-slower cause?
+///
+///   - FAST:    the wiggle (sin/cos), every tick
+///   - REGIME:  frequency 0.5 or 1.2, flipping every ~50–350 ticks
+///   - META:    how OFTEN the regime flips (rarely vs. often), changing every ~800–4000 ticks
+///   - META-META: how OFTEN the meta changes, changing every ~15000–25000 ticks
+///
+/// Same recursion at every rung: each level's hidden state controls the switching RATE of the
+/// level below it, and is invisible in any window shorter than its own timescale. So level 0 can
+/// only reach the regime, a slow level 1 only the meta, and a slower level 2 only the meta-meta.
+/// All three are exposed for scoring only, never as input.
+/// </summary>
+public sealed class DeepNestedStream : IStream
+{
+    private const float SlowFreq = 0.5f;
+    private const float FastFreq = 1.2f;
+
+    private readonly int _width;
+    private readonly int _seed;
+    private Random _random = null!;
+    private float _phase;
+    private int _regime, _meta, _metaMeta;
+    private int _regimeTicksLeft, _metaTicksLeft, _metaMetaTicksLeft;
+
+    public DeepNestedStream(int width = 2, int seed = 1)
+    {
+        _width = width;
+        _seed = seed;
+        Reset();
+    }
+
+    public string Name => "deep-nested";
+    public int Width => _width;
+
+    public float Regime => _regime;
+    public float MetaRegime => _meta;
+    public float MetaMetaRegime => _metaMeta;
+
+    private int MetaDwell() => _metaMeta == 0 ? _random.Next(3000, 4000) : _random.Next(800, 1200);
+    private int RegimeDwell() => _meta == 0 ? _random.Next(250, 350) : _random.Next(50, 90);
+
+    public float[] Next()
+    {
+        if (_metaMetaTicksLeft <= 0) { _metaMeta = 1 - _metaMeta; _metaMetaTicksLeft = _random.Next(15000, 25000); }
+        _metaMetaTicksLeft--;
+
+        if (_metaTicksLeft <= 0) { _meta = 1 - _meta; _metaTicksLeft = MetaDwell(); }
+        _metaTicksLeft--;
+
+        if (_regimeTicksLeft <= 0) { _regime = 1 - _regime; _regimeTicksLeft = RegimeDwell(); }
+        _regimeTicksLeft--;
+
+        _phase += _regime == 0 ? SlowFreq : FastFreq;
+
+        var v = new float[_width];
+        v[0] = MathF.Sin(_phase);
+        if (_width > 1) v[1] = MathF.Cos(_phase);
+        return v;
+    }
+
+    public void Reset()
+    {
+        _random = new Random(_seed);
+        _phase = 0f;
+        _regime = _meta = _metaMeta = 0;
+        _metaMetaTicksLeft = _random.Next(15000, 25000);
+        _metaTicksLeft = MetaDwell();
+        _regimeTicksLeft = RegimeDwell();
+    }
+}

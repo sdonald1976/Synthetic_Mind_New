@@ -245,6 +245,46 @@ Console.WriteLine($"  verdict: every seed — level 0 owns the fast timescale (m
                   $"level 1 owns the slow one (min {metaMin:F3}). No fragility.");
 Console.WriteLine();
 
+Console.WriteLine("  ── does it go DEEPER? three nested timescales ─────────────");
+Console.WriteLine();
+Console.WriteLine("  Now a meta-META-regime sets how often the meta changes. Three hidden causes,");
+Console.WriteLine("  each slower than the last. Stack a slow level on a slow level — each needs a");
+Console.WriteLine("  clock scaled to its target. Does every level end up owning its own timescale?");
+Console.WriteLine();
+
+const int DeepTicks = 300_000;
+const int DeepWindow = 200_000;
+var dR = 9f; var dM = 9f; var dMM = 9f;
+for (var seed = 1; seed <= 3; seed++)
+{
+    var stream = new DeepNestedStream(2, seed);
+    stream.Reset();
+    var level0 = new Unit(new LearnedPredictiveRule(2, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64, seed: seed));
+    var level1 = new TemporalLevel(inputWidth: 4, stride: 16, integratorRate: 0.05f);  // ~300-tick memory → meta
+    var level2 = new TemporalLevel(inputWidth: 8, stride: 32, integratorRate: 0.01f);  // longer memory → meta-meta
+
+    var l0 = new List<float[]>(); var l1 = new List<float[]>(); var l2 = new List<float[]>();
+    var reg = new List<float>(); var met = new List<float>(); var mm = new List<float>();
+    for (var t = 0; t < DeepTicks; t++)
+    {
+        var r = stream.Regime; var m = stream.MetaRegime; var x = stream.MetaMetaRegime;
+        var s0 = level0.Observe(stream.Next()).State;
+        var s1 = level1.Observe(s0);
+        var s2 = level2.Observe(s1);
+        if (t < DeepTicks - DeepWindow) continue;
+        l0.Add(s0); l1.Add(s1); l2.Add(s2); reg.Add(r); met.Add(m); mm.Add(x);
+    }
+    var cr = MaxAbsCorrelation(l0, reg);
+    var cm = MaxAbsCorrelation(l1, met);
+    var cmm = MaxAbsCorrelation(l2, mm);
+    dR = Math.Min(dR, cr); dM = Math.Min(dM, cm); dMM = Math.Min(dMM, cmm);
+    Console.WriteLine($"  seed {seed}:  L0 regime {cr:F3}   L1 meta {cm:F3}   L2 meta-meta {cmm:F3}");
+}
+Console.WriteLine();
+Console.WriteLine($"  verdict: it composes. Each level owns its timescale (mins {dR:F2} / {dM:F2} / {dMM:F2}).");
+Console.WriteLine("  The signal fades with depth — a rate-of-a-rate is noisier — but never collapses.");
+Console.WriteLine();
+
 // Max over state dimensions of |Pearson correlation| between that dimension and the regime.
 static float MaxAbsCorrelation(List<float[]> states, List<float> target)
 {

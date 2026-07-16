@@ -140,6 +140,42 @@ public class FrontierTests
         }
     }
 
+    [Fact]
+    public void The_hierarchy_composes_to_three_timescales()
+    {
+        // Finding 010 — depth. Three nested hidden causes (regime / meta / meta-meta), a learned
+        // level 0 and two stacked TemporalLevels each on a slower clock. Every level should own its
+        // own timescale. The signal fades with depth (a rate-of-a-rate is noisier) so the deeper
+        // thresholds are looser — but each must stay clearly above chance on every seed.
+        const int deepTicks = 300_000;
+        const int deepWindow = 200_000;
+
+        foreach (var seed in new[] { 1, 2, 3 })
+        {
+            var stream = new DeepNestedStream(2, seed);
+            stream.Reset();
+            var level0 = new Unit(new LearnedPredictiveRule(2, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64, seed: seed));
+            var level1 = new TemporalLevel(inputWidth: 4, stride: 16, integratorRate: 0.05f);
+            var level2 = new TemporalLevel(inputWidth: 8, stride: 32, integratorRate: 0.01f);
+
+            var l0 = new List<float[]>(); var l1 = new List<float[]>(); var l2 = new List<float[]>();
+            var reg = new List<float>(); var met = new List<float>(); var mm = new List<float>();
+            for (var t = 0; t < deepTicks; t++)
+            {
+                var r = stream.Regime; var m = stream.MetaRegime; var x = stream.MetaMetaRegime;
+                var s0 = level0.Observe(stream.Next()).State;
+                var s1 = level1.Observe(s0);
+                var s2 = level2.Observe(s1);
+                if (t < deepTicks - deepWindow) continue;
+                l0.Add(s0); l1.Add(s1); l2.Add(s2); reg.Add(r); met.Add(m); mm.Add(x);
+            }
+
+            Assert.True(MaxAbsCorrelation(l0, reg) > 0.6f, $"seed {seed}: level 0 should own the regime");
+            Assert.True(MaxAbsCorrelation(l1, met) > 0.25f, $"seed {seed}: level 1 should own the meta");
+            Assert.True(MaxAbsCorrelation(l2, mm) > 0.18f, $"seed {seed}: level 2 should own the meta-meta");
+        }
+    }
+
     // Max over state dimensions of |Pearson correlation| with the target.
     private static float MaxAbsCorrelation(List<float[]> states, List<float> target)
     {

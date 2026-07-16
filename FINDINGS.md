@@ -4,6 +4,41 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 010 — It composes: three nested timescales, three levels, each owns its own
+*2026-07-16 · Predictive hierarchy · `SyntheticMind.Lab`, `FrontierTests`*
+
+Finding 009 gave a robust two-level hierarchy. The question depth asks: does the trick *stack*? Add a third hidden cause and a third level and see whether the mechanism composes or falls apart.
+
+**The stream** (`DeepNestedStream`): three nested timescales. A regime (frequency, ~50–350 tick dwell); a meta-regime setting how often the regime flips (~800–4000); and a meta-**meta**-regime setting how often the meta flips (~15000–25000). Same recursion at every rung — each hidden cause controls the switching *rate* of the one below and is invisible in any shorter window.
+
+**The stack:** learned unit → `TemporalLevel` (stride 16, ~300-tick memory) → `TemporalLevel` (stride 32, integrator 0.01, ~long memory).
+
+```
+  seed:        L0 ~ regime   L1 ~ meta   L2 ~ meta-meta
+  1            0.769         0.417       ~0.30
+  2            0.837         0.397       ~0.30
+  3            0.789         0.322       ~0.30
+  min          0.769         0.322       0.296
+```
+
+### The result
+
+**It composes. Every level owns its own timescale, on every seed.** Level 0 the fast regime (~0.8), level 1 the meta (~0.4), level 2 the meta-meta (~0.3, min 0.30 with a clock tuned for it). A slow level stacked on a slow level recovers an even-slower cause that is invisible to both levels below it — the same mechanism, applied again, one rung up.
+
+### The one rule that makes it work
+
+**Each level needs a clock scaled to the timescale it hunts.** Level 2 with level 1's clock barely worked (0.13–0.25); giving it a proportionally slower clock (larger stride, slower integrator) brought it to a robust 0.30. The tuning sweep was monotonic — longer level-2 memory, better meta-meta recovery — which is the signature of a real matched-filter effect, not a fluke. So depth isn't free: adding a level means picking its timescale, but there's a clear principle for picking it.
+
+### Honest limit
+
+**The signal fades with depth: 0.8 → 0.4 → 0.3.** Each rung estimates a rate-of-a-rate, which is inherently noisier than the thing below it, so correlation drops as you climb. It stays robustly above chance and never collapses, but this predicts a ceiling — you will not stack ten of these and still read the tenth latent at 0.3. Three works cleanly; how deep it goes before the signal is lost is unmeasured and is itself a fair question.
+
+### Next
+
+Depth is shown. The other half of path A — **learn on top** — is still unbuilt: a learned unit that *uses* a `TemporalLevel`'s slow representation (a readout doesn't destroy the signal the way the max-variance encoder does — finding 008). That closes the loop: fixed temporal senses producing a clean slow representation, with learning layered on top of it.
+
+---
+
 ## 009 — Fragility solved: a robust two-timescale hierarchy
 *2026-07-16 · Predictive hierarchy · `SyntheticMind.Lab`, `FrontierTests`*
 
