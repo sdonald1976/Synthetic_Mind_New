@@ -4,6 +4,39 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 016 — Unsupervised sound-unit discovery, Tier 1: the pieces show up
+*2026-07-16 · Audio · `SyntheticMind.Audio`, `SyllableDiscoveryTests`*
+
+The first rung toward language: can the system find the recurring sound-units of a stream with nobody labeling them? Tier 1 uses 5 distinct synthesized "syllables" (formant-like tone pairs) in random order and **random durations** (so it can't cheat by learning a fixed rhythm). Two mechanisms, both reused from earlier findings, both measured against ground truth.
+
+```
+  segmentation (surprise → boundaries):  precision 0.78   recall 0.89
+  discovery (chunks → k-means → purity): 0.82   (chance ~0.20–0.30)
+```
+
+### The result
+
+**Both halves work, with no labels.**
+- **Segmentation:** level 0's surprise (prediction error, finding 014) peaks at the syllable boundaries — it caught 89% of them. Sounds *within* a syllable are predictable (low surprise); the change *at* a boundary is not (a spike). This is the mechanism infants use to segment speech, running on our pipeline.
+- **Discovery:** the chunks between boundaries, summarized and clustered, sort into the true 5 types at 82% purity — far above the ~0.25 chance floor. The system found *that there are ~5 recurring units* and *which is which*, from an unbroken stream. That's the prototype-memory idea from Slice 0's origin, now fed by discovered speech units instead of labeled objects.
+
+### The recurring lesson, a third time
+
+Discovery clustered on the **perception** (mel), not level 0's learned state — because the max-variance encoder discards this structure (findings 008, 015). The perception preserves the unit identity; the encoder throws it away. Three independent tasks now point to the same architectural fact: *slow/categorical structure lives in perception, and the learned encoder is the wrong place to look for it.* That is starting to look like a law of this architecture, not an accident.
+
+### Honest limits — this is Tier 1 for a reason
+
+- **Synthesized syllables are easy.** Each is a clean, stationary, clearly-distinct spectrum. Real speech has coarticulation (the same "t" differs beside different vowels), speaker variation, and no clean stationary segments. Tiers 2–3 (more units, then real speech) are where it gets hard and may break.
+- **The 5 was known.** k-means was told k=5. Discovering the *number* of units, not just sorting into a given number, is harder and untested.
+- **This is still form, not meaning.** It found the *pieces* speech is made of. It has no idea what any of them refer to — that's rung 4, and it needs grounding (a second sense), which is unbuilt.
+
+### Next
+
+- **Tier 2:** more units (20+), add within-unit variation, and let the model discover the *count* (not hand it k). Find where segmentation and clustering start to smear.
+- **Tier 3:** real speech (jfk.wav). Where do the boundaries land against the actual transcript? Qualitative, but the real test of whether any of this survives contact with reality.
+
+---
+
 ## 015 — A slow level abstracts "what am I hearing" from real audio — speech vs music
 *2026-07-16 · Audio · `SyntheticMind.Audio`, `SyntheticMind.Listen`, `ScenePerceptionTests`*
 
