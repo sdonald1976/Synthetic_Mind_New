@@ -4,6 +4,46 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 003 — Learned state, and the collapse trapdoor, both demonstrated
+*2026-07-16 · Predictive hierarchy v1 · `SyntheticMind.Lab`, `RuleTests`*
+
+Finding 002 ended on: make the state learned, and collapse becomes live (SCAFFOLD.md §7 decision 6). v1 does exactly that — a small all-local predictive autoencoder (Hebbian/Sanger encoder + delta predictor + delta readout, no backprop) — and runs the same machine two ways, differing only in what drives the encoder.
+
+```
+  rule                              late err    ratio   state
+  copy-last (baseline)             3.05E-004    0.929   rank 2.00/4
+  learned/hebbian                  9.96E-004    0.028   rank 2.00/4
+  learned/self-predict (fixture)   4.00E-002    0.927   rank 1.07/4   COLLAPSED
+```
+
+(Error is in INPUT space — a fixed target the model can't shrink — so it's comparable to the baselines. All 20k ticks, bouncing ball.)
+
+### The result
+
+**Same architecture, one decision apart, opposite outcomes.**
+
+- **Encoder driven by variance** (Hebbian): error fell 35× (ratio 0.028), landed within 3× of copy-last, and the state stayed full (rank 2.0, the ball's true DOF). It learned a representation *and* predicted from it *and* did not collapse.
+- **Encoder driven by its own predictability** (self-predict): the state caved in — rank 1.07, variance ~10⁻⁶ — and it predicts input about as badly as guessing the mean. The trapdoor is real, reachable, and not merely theoretical.
+
+**This is the answer to decision 6, demonstrated rather than argued:** drive the encoder with something it cannot shrink to zero (variance), never with prediction error alone. It's the same lesson BYOL/SimSiam/VICReg encode in their stop-gradients and variance floors, reproduced from scratch in ~200 lines of local rules.
+
+### A second lesson, quieter but load-bearing
+
+The collapsed fixture predicts input at 0.04 — *bad*. Earlier intuition (002) said collapse yields deceptively *low* error. Both are true, and the difference is the grading space: collapse scores perfectly when a model is graded in **its own** state space, and terribly when graded against a **fixed** target it doesn't control. Anchoring the loss to the actual input is itself half the anti-collapse story. The readout exists for exactly this.
+
+(Caught a real bug proving this out: the readout had no bias, so it predicted a zero-mean signal for a mean-0.5 stream — error floored at ~0.5²/2 regardless of everything else. A rate/tick sweep that moved *nothing* is what exposed it. Fixed; the numbers above are post-fix.)
+
+### Honest limits
+
+- Hebbian (9.96E-4) is still ~3× worse than copy-last and ~6× worse than v0's delay-line (002). **Learned state has bought robustness-to-collapse, not yet accuracy.** Its payoff is supposed to be abstraction, which needs the hierarchy —
+- — and the hierarchy still shows nothing (unchanged from 002; those levels are still v0 units). The emergent-abstraction claim (SCAFFOLD.md §3) remains entirely unsupported.
+
+### Next
+
+Stack *learned* units and ask the 002 question again: does a second learned level, further from the input, discover something slower than the first — without being told to? That is the actual thesis, and it's the first thing v1 makes testable.
+
+---
+
 ## 002 — The primitive works; the hierarchy doesn't yet; and the two facts are the same fact
 *2026-07-15 · Predictive hierarchy v0 · `SyntheticMind.Lab`*
 

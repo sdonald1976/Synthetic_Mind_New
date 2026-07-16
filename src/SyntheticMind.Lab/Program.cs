@@ -44,6 +44,27 @@ foreach (var stream in streams)
     Console.WriteLine();
 }
 
+Console.WriteLine("  ── v1: learned state, and the collapse battle ─────────────");
+Console.WriteLine("  (error is in INPUT space, comparable to the baselines above)");
+Console.WriteLine();
+Console.WriteLine($"  {"rule",-30}{"late err",12}{"ratio",9}   state");
+
+var ballV1 = new BouncingBallStream(Width);
+IUnitRule[] learnedRules =
+[
+    new CopyLastRule(Width),  // the bar, repeated here for a same-space comparison
+    new LearnedPredictiveRule(Width, stateWidth: 4, drive: EncoderDrive.Variance),
+    new LearnedPredictiveRule(Width, stateWidth: 4, drive: EncoderDrive.Predictability),
+];
+
+foreach (var rule in learnedRules)
+{
+    var result = Experiment.Run(rule, ballV1, Ticks);
+    Console.WriteLine(
+        $"  {result.Rule,-30}{result.LateError,12:E2}{result.LearningRatio,9:F3}   {result.Collapse}");
+}
+
+Console.WriteLine();
 Console.WriteLine("  ── two-level hierarchy on bouncing-ball ───────────────────");
 Console.WriteLine();
 
