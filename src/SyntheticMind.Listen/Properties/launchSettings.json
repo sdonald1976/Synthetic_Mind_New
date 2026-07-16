@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "SyntheticMind.Listen": {
+      "commandName": "Project",
+      "commandLineArgs": "C:\\Source\\repos\\Synthetic_Mind_New\\testaudio\\jfk.wav"
+    }
+  }
+}
