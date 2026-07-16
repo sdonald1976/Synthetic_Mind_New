@@ -176,6 +176,43 @@ public class FrontierTests
         }
     }
 
+    [Fact]
+    public void A_learned_readout_uses_the_slow_representation_without_destroying_it()
+    {
+        // Finding 011 — learn on top (the other half of path A). A learned predictor on the slow
+        // level predicts its next state AND preserves the abstraction (correlation with meta stays
+        // ~0.4-0.5), where finding 008's max-variance encoder erased the same signal to 0.00. The
+        // point: the thing that learns on top is a READOUT (trained toward a target), not an
+        // ENCODER (chasing variance).
+        foreach (var seed in new[] { 1, 2, 3, 4 })
+        {
+            var stream = new NestedRegimeStream(2, seed);
+            stream.Reset();
+            var level0 = new Unit(new LearnedPredictiveRule(2, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64, seed: seed));
+            var level1 = new TemporalLevel(inputWidth: 4, stride: 16, integratorRate: 0.05f);
+            var readout = new LinearPredictor(level1.StateWidth, level1.StateWidth, rate: 0.005f);
+            float[]? previous = null;
+
+            var predictions = new List<float[]>();
+            var metas = new List<float>();
+            for (var t = 0; t < 100_000; t++)
+            {
+                var meta = stream.MetaRegime;
+                var s0 = level0.Observe(stream.Next()).State;
+                var slow = level1.Observe(s0);
+                var pred = readout.Predict(slow);
+                if (previous is not null) readout.Learn(previous, slow);
+                previous = slow;
+                if (t < 40_000) continue;
+                predictions.Add(pred);
+                metas.Add(meta);
+            }
+
+            Assert.True(MaxAbsCorrelation(predictions, metas) > 0.35f,
+                $"seed {seed}: the learned readout should carry the abstraction through, not erase it");
+        }
+    }
+
     // Max over state dimensions of |Pearson correlation| with the target.
     private static float MaxAbsCorrelation(List<float[]> states, List<float> target)
     {

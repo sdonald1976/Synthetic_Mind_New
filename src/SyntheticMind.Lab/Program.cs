@@ -285,6 +285,59 @@ Console.WriteLine($"  verdict: it composes. Each level owns its timescale (mins 
 Console.WriteLine("  The signal fades with depth — a rate-of-a-rate is noisier — but never collapses.");
 Console.WriteLine();
 
+Console.WriteLine("  ── LEARN on top: a learned layer that USES the abstraction ─");
+Console.WriteLine();
+Console.WriteLine("  A learned predictor (delta rule) sits on the slow level and predicts its next");
+Console.WriteLine("  state. The test: does it USE the slow representation without destroying it? A");
+Console.WriteLine("  max-variance encoder turned this same signal into 0.00 (finding 008); a readout");
+Console.WriteLine("  is trained toward a target, so it carries the signal through.");
+Console.WriteLine();
+
+var preserveMin = 9f;
+for (var seed = 1; seed <= 6; seed++)
+{
+    var stream = new NestedRegimeStream(2, seed);
+    stream.Reset();
+    var level0 = new Unit(new LearnedPredictiveRule(2, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64, seed: seed));
+    var level1 = new TemporalLevel(inputWidth: 4, stride: 16, integratorRate: 0.05f);
+    var readout = new LinearPredictor(level1.StateWidth, level1.StateWidth, rate: 0.005f);  // low rate: inputs are ~O(1)
+    float[]? previous = null;
+
+    var predictions = new List<float[]>();
+    var actuals = new List<float[]>();
+    var metas = new List<float>();
+    for (var t = 0; t < 100_000; t++)
+    {
+        var meta = stream.MetaRegime;
+        var s0 = level0.Observe(stream.Next()).State;
+        var slow = level1.Observe(s0);
+        var pred = readout.Predict(slow);
+        if (previous is not null) readout.Learn(previous, slow);
+        previous = slow;
+        if (t < 40_000) continue;
+        predictions.Add(pred);
+        actuals.Add(slow);
+        metas.Add(meta);
+    }
+
+    var predMeta = MaxAbsCorrelation(predictions, metas);
+    var quality = 0f;
+    for (var d = 0; d < level1.StateWidth; d++)
+    {
+        var p = predictions.Select(r => r[d]).ToList();
+        var a = actuals.Select(r => r[d]).ToList();
+        // reuse the scalar-target correlation by treating actual dim as the target
+        var q = MaxAbsCorrelation(p.Select(v => new[] { v }).ToList(), a);
+        if (q > quality) quality = q;
+    }
+    preserveMin = Math.Min(preserveMin, predMeta);
+    Console.WriteLine($"  seed {seed}:  learned prediction ~ meta {predMeta:F3} (preserved)   prediction quality {quality:F3}");
+}
+Console.WriteLine();
+Console.WriteLine($"  verdict: the learned readout predicts the slow level AND carries the abstraction " +
+                  $"through (min {preserveMin:F2}), where a max-variance encoder erased it.");
+Console.WriteLine();
+
 // Max over state dimensions of |Pearson correlation| between that dimension and the regime.
 static float MaxAbsCorrelation(List<float[]> states, List<float> target)
 {

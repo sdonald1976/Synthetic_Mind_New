@@ -4,6 +4,45 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 011 — Learn on top: a learned layer that uses the abstraction instead of erasing it
+*2026-07-16 · Predictive hierarchy · `SyntheticMind.Lab`, `FrontierTests`*
+
+The other half of path A. The fixed `TemporalLevel` produces a clean slow representation (finding 009); this closes the loop by putting a *learned* layer on top that uses it. The catch from finding 008: a learned max-variance ENCODER destroys slow structure (0.5 → 0.00). The resolution: what learns on top is a READOUT, not an encoder.
+
+**The piece:** `LinearPredictor` — an online delta-rule linear predictor. Trained toward a target rather than toward variance, so it carries whatever predicts that target, slow structure included.
+
+**The result** (readout on the slow level, predicting the next slow state):
+
+```
+  seed:                1      2      3      4      5      6
+  prediction ~ meta:  0.524  0.424  0.462  0.533  0.542  0.579   (preserved — was 0.00 for the encoder)
+  prediction quality: 1.00   1.00   1.00   1.00   1.00   1.00    (learned the slow dynamics)
+```
+
+The learned readout predicts the slow level's next state essentially perfectly, and its predictions **preserve the meta-regime at 0.42–0.58** — identical to the input representation. It uses the abstraction without erasing it, exactly where the max-variance encoder erased it to 0.00. That contrast is the whole point: *what learns on top of a slow representation must be a predictor, not a variance-seeker.*
+
+### Two honest notes
+
+- **Prediction quality 1.00 is partly free.** The slow state only changes once per pooling window (held constant between), so "predict next = current" is nearly right by default. The meaningful number is the preservation (0.42–0.58), not the quality.
+- **The readout needs a learning rate matched to its input scale.** The slow state runs ~O(1); at rate 0.1–0.5 the delta rule diverged to NaN (which reads as 0 correlation — the bug that ate an hour of this session). At 0.005 it's stable. A real gotcha, worth the scar.
+
+### Where path A stands, complete
+
+Both halves are now built and robust:
+- **Fixed temporal senses** (`TemporalLevel`: change-sensing + integration) produce a robust slow representation on every seed — findings 009 (two levels), 010 (composes to three).
+- **Learning on top** (`LinearPredictor`) uses that representation without destroying it — this finding.
+
+The architecture the project reached: a fast learned level that tracks the moment-to-moment cause, fixed temporal levels above it that expose progressively slower hidden causes, and learned readouts that build on those slow representations. Robust, tested, and understood.
+
+### Next
+
+The synthetic-stream phase has done its job — it proved the mechanism cleanly and cheaply. Real options now:
+- **A real stream.** Point level 0 at something with genuine nested structure — audio (phonemes → words → prosody), or the earlier webcam idea — and see whether the timescales it discovers are meaningful rather than synthetic.
+- **Close the top-down loop.** So far information only flows up. Let a slow level's representation bias the level below (attention/prediction), the missing back-edge from [ARCHITECTURE.md §5](ARCHITECTURE.md).
+- **Path B, still optional.** Revisit whether a learned rule could replace the fixed `TemporalLevel` — now a research luxury, not a blocker.
+
+---
+
 ## 010 — It composes: three nested timescales, three levels, each owns its own
 *2026-07-16 · Predictive hierarchy · `SyntheticMind.Lab`, `FrontierTests`*
 
