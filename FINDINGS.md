@@ -4,6 +4,34 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 019 — A second sense: it watches video, and the architecture is modality-agnostic
+*2026-07-16 · Vision · `SyntheticMind.Vision`, `VideoLearningTests`*
+
+Added a vision front-end, exactly parallel to audio: a `Retina` (the eye's cochlea — fixed, dumb, downsampled brightness + motion grids, SCAFFOLD.md §4) and a `VideoStream` that decodes a real video file (animated GIF via ImageSharp, no native codec) into a stream of feature vectors. Then fed a real clip — Wikimedia's rotating-Earth GIF — into the **same** hierarchy the audio used.
+
+```
+  earth.gif — 44 frames, 400×400, 128 retina features (8×8 brightness + 8×8 motion)
+  mean surprise per loop:  0.0076 → 0.0054 → 0.0045 → … → 0.0030   (2.5× over 8 loops)
+```
+
+### The result
+
+**It watches video and learns the motion — same behavior, same code, different sense.** Surprise fell 2.5× as it saw the rotation repeat: it learned to predict the Earth turning, unsupervised, exactly as it learned to predict speech (finding 014). The *only* thing that changed from the audio pipeline is the front end (retina vs. cochlea). The hierarchy, the learning rule, the surprise signal — all identical and untouched.
+
+That is the strongest evidence yet for the founding bet (SCAFFOLD.md §2): **the learning is modality-agnostic.** One mechanism, any stream. Sur's rewired ferrets grew visual cortex out of auditory cortex; here the same unit learns vision or sound depending only on what's plugged in.
+
+### Honest limits
+
+- **The retina is coarse** — 8×8 brightness + motion. Enough to learn "the bright disc is rotating"; nowhere near enough to tell two similar objects apart. Fine for proving the pipeline; a real perceptual front end is much richer.
+- **GIF, not MP4.** A dependency-light stand-in for "a video file." Real video (H.264 etc.) needs a codec (FFmpeg); not added.
+- **This is still perception, not grounding.** It learned the *dynamics* of what it saw. It has no idea it's an "Earth" — that's the next step, and the reason this sense was built.
+
+### Next — grounding (the point of a second sense)
+
+Now that sound and vision run through the same architecture, a unit in one can bind to a unit in the other. That is rung 4 — meaning — and it's the whole reason to have two senses. The concrete first experiment: a clip where a visual thing co-occurs with a label or a spoken word, and the system binds the seen pattern to it. That's the next build.
+
+---
+
 ## 018 — Tier 3: the segmenter fires at syllable rate on real speech, and respects the pauses
 *2026-07-16 · Audio · `SyntheticMind.Listen --segment`*
 

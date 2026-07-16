@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyntheticMind.Audio", "src\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyntheticMind.Listen", "src\SyntheticMind.Listen\SyntheticMind.Listen.csproj", "{C2EC4AB4-49CD-473B-A98D-58512012018F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyntheticMind.Vision", "src\SyntheticMind.Vision\SyntheticMind.Vision.csproj", "{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -87,6 +89,18 @@ Global
 		{C2EC4AB4-49CD-473B-A98D-58512012018F}.Release|x64.Build.0 = Release|Any CPU
 		{C2EC4AB4-49CD-473B-A98D-58512012018F}.Release|x86.ActiveCfg = Release|Any CPU
 		{C2EC4AB4-49CD-473B-A98D-58512012018F}.Release|x86.Build.0 = Release|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Debug|x64.Build.0 = Debug|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Debug|x86.Build.0 = Debug|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Release|x64.ActiveCfg = Release|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Release|x64.Build.0 = Release|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Release|x86.ActiveCfg = Release|Any CPU
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -97,6 +111,7 @@ Global
 		{D09FC68E-E0EE-4976-9B23-B9478B7AA25A} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{41481A52-CD02-4EE4-BF55-578E9D78CA31} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{C2EC4AB4-49CD-473B-A98D-58512012018F} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{480CB110-BB4E-480D-A2DB-E4C8B6CE57DD} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {BC1C740D-8C51-48DB-B68B-6773356882D1}
