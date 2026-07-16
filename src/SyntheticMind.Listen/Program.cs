@@ -57,8 +57,9 @@ float[] PullSamples()
 // --- the pipeline: cochlea → learned level 0 → a slow level ---
 var cochlea = new Cochlea(SampleRate, fftSize: 512, melBands: MelBands);
 var audio = new AudioStream(PullSamples, cochlea, Hop);
-// No quad features (pitch/timbre are linear in the mel spectrum), low rate for the mel scale.
-var level0 = new Unit(new LearnedPredictiveRule(MelBands, stateWidth: 8, history: 8, quadraticFeatures: 0, encoderRate: 0.0001f));
+// No quad features (pitch/timbre are linear in the mel spectrum). Default rate — NLMS normalization
+// (finding 013) makes the encoder scale-free, so no hand-tuning for audio.
+var level0 = new Unit(new LearnedPredictiveRule(MelBands, stateWidth: 8, history: 8, quadraticFeatures: 0));
 var slow = new TemporalLevel(inputWidth: 8, stride: 25, integratorRate: 0.05f);  // ~quarter-second summary
 
 mic.StartRecording();

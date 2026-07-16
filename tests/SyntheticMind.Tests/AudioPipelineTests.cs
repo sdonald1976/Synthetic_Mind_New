@@ -40,9 +40,9 @@ public class AudioPipelineTests
 
         var audio = new AudioStream(Pull, cochlea, hop);
         // Pitch is a LINEAR feature in the mel spectrum (which band is hot), so no quad features —
-        // they'd just add high-variance distractors here. And a low encoder rate matched to the
-        // (normalized, but higher-dimensional) mel input, per the findings-008/011 scale lesson.
-        var level0 = new Unit(new LearnedPredictiveRule(cochlea.MelBands, stateWidth: 6, history: 8, quadraticFeatures: 0, encoderRate: 0.0001f));
+        // they'd just add high-variance distractors here. The encoder rate is now the DEFAULT: NLMS
+        // normalization (finding 013) makes one rate work across synthetic and audio, no hand-tuning.
+        var level0 = new Unit(new LearnedPredictiveRule(cochlea.MelBands, stateWidth: 6, history: 8, quadraticFeatures: 0));
 
         var states = new List<float[]>();
         var pitches = new List<float>();

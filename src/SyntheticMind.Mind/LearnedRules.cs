@@ -101,7 +101,7 @@ public sealed class LearnedPredictiveRule : IUnitRule
         int stateWidth,
         EncoderDrive drive = EncoderDrive.Variance,
         int history = 3,
-        float encoderRate = 0.005f,
+        float encoderRate = 0.10f,   // effective rate is this / input-energy (NLMS), so scale-free
         float predictorRate = 0.02f,
         float readoutRate = 0.02f,
         float meanRate = 0.002f,
@@ -254,6 +254,13 @@ public sealed class LearnedPredictiveRule : IUnitRule
 
     private void UpdateEncoder(float[] centered, float[] state)
     {
+        // Scale-invariant step (NLMS): divide the effective rate by this input's own energy. A big
+        // input no longer means a big, unstable update, so one rate holds across synthetic and audio
+        // inputs instead of being hand-tuned per source. Using the instantaneous energy (not a
+        // running estimate) avoids a warmup transient where an unconverged estimate lets the rate
+        // spike and diverge. The +1 floor keeps a near-silent frame from producing a huge step.
+        var rate = _encRate / (TensorPrimitives.Dot<float>(centered, centered) + 1f);
+
         switch (_drive)
         {
             case EncoderDrive.Variance:
@@ -265,7 +272,7 @@ public sealed class LearnedPredictiveRule : IUnitRule
                 for (var i = 0; i < _k; i++)
                 {
                     for (var j = 0; j < centered.Length; j++) residual[j] -= state[i] * _we[i][j];
-                    var scale = _encRate * state[i];
+                    var scale = rate * state[i];
                     for (var j = 0; j < centered.Length; j++) _we[i][j] += scale * residual[j];
                 }
                 break;
@@ -277,7 +284,7 @@ public sealed class LearnedPredictiveRule : IUnitRule
                 {
                     for (var i = 0; i < _k; i++)
                     {
-                        var scale = -_encRate * (state[i] - _predictedNextState[i]);
+                        var scale = -rate * (state[i] - _predictedNextState[i]);
                         for (var j = 0; j < centered.Length; j++) _we[i][j] += scale * centered[j];
                     }
                 }
@@ -292,7 +299,7 @@ public sealed class LearnedPredictiveRule : IUnitRule
                 for (var i = 0; i < _k; i++)
                 {
                     var derivative = TensorPrimitives.Dot<float>(_we[i], d);
-                    var scale = -_encRate * derivative;
+                    var scale = -rate * derivative;
                     for (var j = 0; j < n; j++) _we[i][j] += scale * d[j];
                 }
                 OrthonormalizeEncoderRows();  // the anti-collapse guarantee, enforced not hoped

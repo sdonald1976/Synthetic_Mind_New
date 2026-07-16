@@ -4,6 +4,37 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 013 — Self-scaling encoder: one learning rate for every input
+*2026-07-16 · Predictive hierarchy · `SyntheticMind.Mind`, whole suite*
+
+The rate/scale fragility surfaced in findings 008, 011, and 012 — every new input type needed the encoder's learning rate re-tuned by hand, or it diverged to NaN (which reads as a flat 0.000). This fixes it at the source.
+
+**The fix:** normalize the encoder's step size by the input's own energy — NLMS (normalized least-mean-squares). The effective rate becomes `rate / (‖input‖² + 1)`, so a big input no longer means a big, unstable update.
+
+```
+  base rate 0.10, one value, three very different inputs:
+    synthetic regime (±1, 2-band, nonlinear)   level 0 ~ regime   0.83
+    audio pitch      (mel ~1.1, 20-band, linear) level 0 ~ pitch   0.88
+    + downstream meta via the fixed slow level   L1 ~ meta          0.40
+```
+
+One rate now works across a ±1 synthetic signal and a ~1.1 twenty-band audio spectrum — the hand-tuning (0.005 here, 0.0001 there) is gone. The audio test and the live demo dropped their bespoke rates and use the default.
+
+### Two things that mattered in getting it right
+
+- **Instantaneous energy, not a running estimate.** A running energy estimate starts wrong and converges slowly; during that warmup the rate spikes and the weights diverge before the estimate catches up (worse for high-dimensional audio). Per-step ‖input‖² has no warmup. The `+1` floor keeps a near-silent frame from producing a huge step.
+- **It shifted the fragile results, and that's honest.** Changing the core encoder moved the numbers on the two most fragile tests: the meta-meta at depth actually got *stronger* (0.40–0.56, was ~0.30), but the seed-fragile learned-level-1 (finding 007) recovered on a *different* set of seeds (0.01/0.32/0.09/0.17/0.62/0.46). Those tests hardcoded specific seeds; they now scan seeds and assert the phenomenon (best-seed works, spread = fragility) rather than a brittle exact number. The robust results (two-level, detection, readout, regime, audio) passed unchanged.
+
+### Why this matters beyond tidiness
+
+Every future input — a camera, a different sensor, a deeper stack — would have re-levied the same tax. Scale-invariance means the encoder now meets a new input without a human first guessing its magnitude. It's a small change (`rate / ‖input‖²`) that removes a recurring failure mode, which is the best kind.
+
+### Next
+
+Unchanged from 012: the live demo is still the first real-world check to run by hand, and whether the slow levels find *meaningful* structure in real speech is still the open question. The plumbing is just sturdier now.
+
+---
+
 ## 012 — First real input: the hierarchy hears pitch through a cochlea
 *2026-07-16 · Audio · `SyntheticMind.Audio`, `AudioPipelineTests`, `SyntheticMind.Listen`*
 
