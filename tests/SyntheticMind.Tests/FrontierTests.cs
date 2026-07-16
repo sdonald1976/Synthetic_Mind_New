@@ -66,6 +66,45 @@ public class FrontierTests
     }
 
     [Fact]
+    public void The_robust_two_level_hierarchy_owns_both_timescales_on_every_seed()
+    {
+        // Finding 009 — fragility solved (chose path A). A learned level 0 plus a fixed slow level
+        // (TemporalLevel: change-sensing + integration) makes each level robustly own its timescale
+        // on EVERY seed: level 0 the fast regime, level 1 the slow meta-regime. Contrast
+        // A_slowed_level1_can_recover_what_level0_cannot, which is the same claim but seed-fragile
+        // with a learned level 1.
+        foreach (var seed in new[] { 1, 2, 3, 4, 5, 6 })
+        {
+            var stream = new NestedRegimeStream(2, seed);
+            stream.Reset();
+            var level0 = new Unit(new LearnedPredictiveRule(2, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64, seed: seed));
+            var level1 = new TemporalLevel(inputWidth: 4, stride: 16, integratorRate: 0.05f);
+
+            var l0 = new List<float[]>();
+            var l1 = new List<float[]>();
+            var regimes = new List<float>();
+            var metas = new List<float>();
+
+            for (var t = 0; t < Ticks; t++)
+            {
+                var regime = stream.Regime;
+                var meta = stream.MetaRegime;
+                var s0 = level0.Observe(stream.Next()).State;
+                var s1 = level1.Observe(s0);
+                if (t < Ticks - Window) continue;
+                l0.Add(s0);
+                l1.Add(s1);
+                regimes.Add(regime);
+                metas.Add(meta);
+            }
+
+            Assert.True(MaxAbsCorrelation(l0, regimes) > 0.6f, $"seed {seed}: level 0 should own the regime");
+            Assert.True(MaxAbsCorrelation(l1, metas) > 0.35f, $"seed {seed}: level 1 should own the meta-regime");
+            Assert.True(MaxAbsCorrelation(l0, metas) < 0.15f, $"seed {seed}: level 0 should stay blind to meta");
+        }
+    }
+
+    [Fact]
     public void Change_sensing_plus_integration_robustly_recovers_the_meta_regime()
     {
         // Finding 008's robust path. The learned max-variance encoder gets ~0 on the meta-regime

@@ -4,6 +4,45 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 009 — Fragility solved: a robust two-timescale hierarchy
+*2026-07-16 · Predictive hierarchy · `SyntheticMind.Lab`, `FrontierTests`*
+
+Finding 008 localized the fragility to the learned max-variance encoder and identified the robust path: fixed temporal primitives (change-sensing + integration) instead of hoping the encoder discovers slowness. The choice was to take that path (build the primitives in, learn on top). This is that, built and measured.
+
+**The piece:** `TemporalLevel` — a higher level made of fixed machinery, not a learned encoder. Each window it emits an integrated MEAN pool (slow *level* structure) concatenated with an integrated CHANGE-ENERGY pool (slow *rate* structure), so it captures the slow latent whether it's a level or a rate. It's the "built-in sense," one rung above the retina (SCAFFOLD.md §4).
+
+**The system:** a learned unit at level 0, a `TemporalLevel` at level 1, on the nested stream.
+
+```
+  seed:        1      2      3      4      5      6      min
+  L0 ~ regime 0.774  0.845  0.785  0.809  0.842  0.807  0.774   (fast timescale)
+  L0 ~ meta   0.006  0.017  0.014  0.004  0.009  0.018  —       (blind, by design)
+  L1 ~ meta   0.524  0.424  0.461  0.534  0.543  0.580  0.424   (slow timescale)
+```
+
+### The result
+
+**Every seed. Both timescales. No fragility.** Level 0 robustly owns the fast regime (0.77–0.85), is blind to the slow meta-regime (0.01), and level 1 robustly owns the meta-regime (0.42–0.58). The weakest level-1 seed here (0.424) beats the *best* seed of the fragile learned version in finding 007 (0.38), and there are no failing seeds at all — where 007 failed on half.
+
+This is a genuine, clean two-timescale hierarchy: a fast learned level that tracks the moment-to-moment cause, and a slow fixed level that tracks the hidden cause behind it, reliably, from a signal in which that cause is invisible to any short window.
+
+### What it cost, stated plainly
+
+Level 1 is **not learned** — it's fixed temporal machinery. So this is not "a learned hierarchy that discovers abstraction"; it's "a hierarchy where higher levels apply built-in temporal senses and could learn on top of them." That was the deliberate trade of path A: robustness now, at the price of some purity. The learned-encoder version (007) is still in the tree and still fragile — that's the honest contrast, and the seed-fragile test remains next to the robust one to keep it visible.
+
+### What's genuinely settled
+
+The project's central bet — that a higher level can discover structure a lower one provably cannot — is now demonstrated **robustly**, not just occasionally. Seven findings ago this was speculation; five ago it was a fragile 3/6; now it's every seed with a comfortable margin. The mechanism is understood well enough to build deliberately rather than stumble into.
+
+### Next
+
+The building block is solid. Options, roughly in order of how much they extend the win:
+- **Depth:** a third level on a still-slower clock — does a `TemporalLevel` over a `TemporalLevel` recover an even-slower latent? Tests whether this composes.
+- **Learn on top:** put a learned readout/unit above the `TemporalLevel` and have it *use* the slow representation for prediction — the "learn on top" half of path A, so far unbuilt.
+- **Back to the pure question (path B), now optional:** with a robust system in hand, revisit whether a *learned* rule could replace the fixed level without the fragility. Research, not blocking.
+
+---
+
 ## 008 — Why it's fragile, run to ground: the max-variance encoder is the bottleneck
 *2026-07-16 · Predictive hierarchy · `SyntheticMind.Lab`, `FrontierTests`*
 
