@@ -4,6 +4,42 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 015 — A slow level abstracts "what am I hearing" from real audio — speech vs music
+*2026-07-16 · Audio · `SyntheticMind.Audio`, `SyntheticMind.Listen`, `ScenePerceptionTests`*
+
+The keystone test: does a slow level find *meaningful* structure on *real* input, or only on the synthetic streams we designed to be discoverable? Alternated two real sources — JFK speech and a music clip — every 4 seconds, and asked whether the hierarchy forms a stable representation of which one is playing (a real, nameable slow variable; ground truth controlled).
+
+```
+  raw perception (mel) ~ source           0.78   (present, but jittery frame-to-frame)
+  learned level-0 state ~ source          0.12–0.36   (the encoder throws it away)
+  slow level over perception ~ source     0.80   (stable — a clean 'what am I hearing')
+```
+
+`dotnet run --project src/SyntheticMind.Listen -- jfk.wav music.wav` → **0.797**.
+
+### The result
+
+**A slow level forms a stable abstraction of "speech vs music" at 0.80 — with no labels.** Not a synthetic latent; a real, nameable property of real sound. The core thesis (a level discovers slow structure) holds on real input, and the thing it discovered is *interpretable*. That's the keystone.
+
+### Two architectural findings, both real
+
+1. **The learned encoder discards the source.** It's plainly in the perception (0.78), and level 0's max-variance encoder drops it to 0.12–0.36. Finding 008 — the encoder is blind to slow, mean-level structure — confirmed on real audio, not just synthetic. **So the slow level had to pool the PERCEPTION directly, not level 0's output.** Higher levels need access to perception, not only the learned encoder beneath them. (This is the "back-edge / multiple information sources" idea from [ARCHITECTURE.md §5](ARCHITECTURE.md), arrived at empirically.)
+
+2. **The clock must match the timescale.** Pooling perception with too-slow integration (~5 s memory) blurred across the 4 s source segments → 0.34. Matching the integrator to the source (~2–3 s memory) → 0.80. Finding 010's rule, holding on real audio: a level's clock is a real parameter tied to the structure it hunts.
+
+### Honest limits
+
+- **The structure was imposed by me**, not found in the wild — I controlled the 4 s switching so there'd be ground truth. The model discovered *which* source, not *that there are sources*. Segmenting an unlabeled stream into its own regimes is the harder, untested next thing.
+- **Source identity is an "easy" abstraction** — a gross mean-spectral difference (speech energy 23 vs music 19). Phonemes, words, musical structure are far subtler and remain untouched.
+- The normalization that helps the encoder (gain control) *hurts* here — it subtracts the mean-spectral difference that carries the source. Turned off for this experiment; the tension between "normalize for stability" and "preserve slow structure" is unresolved and real.
+
+### Next
+
+- **Unsupervised segmentation.** Can a slow level partition a stream into regimes it wasn't told exist — no imposed switching? That's the real version of this.
+- **Subtler abstractions.** Two speakers instead of speech-vs-music; verse-vs-chorus in one song. Where does "easy mean-difference" give way to something the model can't reach?
+
+---
+
 ## 014 — It learns to predict real speech, on the fly, in eleven seconds
 *2026-07-16 · Audio · `SyntheticMind.Audio`, `SyntheticMind.Listen`*
 

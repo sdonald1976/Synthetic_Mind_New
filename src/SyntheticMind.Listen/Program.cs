@@ -18,11 +18,69 @@ var cochlea = new Cochlea(SampleRate, fftSize: 512, melBands: MelBands);
 // scale-free (NLMS, finding 013), so no per-input tuning.
 var level0 = new Unit(new LearnedPredictiveRule(MelBands, stateWidth: 8, history: 8, quadraticFeatures: 0));
 
-if (args.Length > 0 && args[0].EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+if (args.Length >= 2 && args[0].EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+    AuditionScene(args[0], args[1], cochlea);
+else if (args.Length == 1 && args[0].EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
     AuditionFile(args[0], cochlea, level0);
 else
     LiveMicrophone(cochlea, level0);
 return;
+
+// ---- scene mode: alternate two files, does a slow level track WHICH is playing? -------------
+static void AuditionScene(string pathA, string pathB, Cochlea cochlea)
+{
+    var a = WavReader.ReadMono(pathA, SampleRate);
+    var b = WavReader.ReadMono(pathB, SampleRate);
+    Console.WriteLine($"\n  alternating {Path.GetFileName(pathA)} ↔ {Path.GetFileName(pathB)} every 4s\n");
+
+    const int switchSamples = 4 * SampleRate;
+    int source = 0, pa = 0, pb = 0; long idx = 0;
+    float[] Pull()
+    {
+        var block = new float[Hop];
+        for (var i = 0; i < Hop; i++)
+        {
+            if (idx > 0 && idx % switchSamples == 0) source = 1 - source;
+            block[i] = source == 0 ? a[pa++ % a.Length] : b[pb++ % b.Length];
+            idx++;
+        }
+        return block;
+    }
+    var audio = new AudioStream(Pull, cochlea, Hop, normalize: false);  // keep the source signal
+    // Slow level pools PERCEPTION, not the learned encoder — the encoder discards slow source
+    // identity (finding 015). Clock (~2.5s memory) matched to the 4s source switching.
+    var slow = new TemporalLevel(MelBands, stride: 10, integratorRate: 0.3f);
+
+    var states = new List<float[]>();
+    var sources = new List<float>();
+    var frames = (a.Length + b.Length) * 3 / Hop;   // a few loops through both
+    for (var t = 0; t < frames; t++)
+    {
+        var s = slow.Observe(audio.Next());
+        if (t < frames / 3) continue;   // warmup
+        states.Add(s);
+        sources.Add(source);
+    }
+
+    Console.WriteLine($"  slow level tracks which source is playing: correlation {MaxAbsCorrelation(states, sources):F3}");
+    Console.WriteLine("  (a stable 'what am I hearing' abstraction, formed with no labels)\n");
+}
+
+static float MaxAbsCorrelation(List<float[]> states, List<float> target)
+{
+    var best = 0f;
+    for (var d = 0; d < states[0].Length; d++)
+    {
+        double sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0;
+        var n = states.Count;
+        for (var i = 0; i < n; i++) { double x = states[i][d], y = target[i]; sx += x; sy += y; sxx += x * x; syy += y * y; sxy += x * y; }
+        var cov = sxy - sx * sy / n; var vx = sxx - sx * sx / n; var vy = syy - sy * sy / n;
+        if (vx <= 1e-12 || vy <= 1e-12) continue;
+        var r = (float)Math.Abs(cov / Math.Sqrt(vx * vy));
+        if (r > best) best = r;
+    }
+    return best;
+}
 
 // ---- WAV file mode: run the clip and show surprise vs. loudness over time --------------------
 static void AuditionFile(string path, Cochlea cochlea, Unit level0)
