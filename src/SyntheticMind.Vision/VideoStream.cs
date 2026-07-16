@@ -1,5 +1,3 @@
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
 using SyntheticMind.Mind;
 
 namespace SyntheticMind.Vision;
@@ -8,9 +6,9 @@ namespace SyntheticMind.Vision;
 /// Streams frames from a video file through the <see cref="Retina"/>, producing one feature vector
 /// per frame — the perception branch's output, ready for a hierarchy, exactly like AudioStream.
 ///
-/// Reads animated GIF (via ImageSharp, no native codec needed) — a real, downloadable "video file"
-/// in the same spirit as feeding WAVs. All frames are decoded to grayscale up front, then streamed
-/// (and looped) on demand.
+/// Reads animated GIF (via our own <see cref="GifDecoder"/> — no dependency, no native codec) — a
+/// real, downloadable "video file" in the same spirit as feeding WAVs. All frames are decoded to
+/// grayscale up front, then streamed (and looped) on demand.
 /// </summary>
 public sealed class VideoStream : IStream
 {
@@ -24,21 +22,16 @@ public sealed class VideoStream : IStream
     {
         _retina = retina;
 
-        using var image = Image.Load<L8>(path);   // L8 = 8-bit luminance (grayscale)
-        _width = image.Width;
-        _height = image.Height;
+        var (frames, width, height) = GifDecoder.DecodeGrayscale(path);
+        _width = width;
+        _height = height;
 
-        for (var f = 0; f < image.Frames.Count; f++)
+        foreach (var bytes in frames)
         {
-            using var frame = image.Frames.CloneFrame(f);
-            var bytes = new byte[_width * _height];
-            frame.CopyPixelDataTo(bytes);
             var pixels = new float[bytes.Length];
             for (var i = 0; i < bytes.Length; i++) pixels[i] = bytes[i] / 255f;
             _frames.Add(pixels);
         }
-
-        if (_frames.Count == 0) throw new InvalidDataException($"'{path}' decoded to zero frames.");
     }
 
     public string Name => "video";
