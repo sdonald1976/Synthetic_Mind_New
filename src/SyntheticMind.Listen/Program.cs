@@ -18,13 +18,54 @@ var cochlea = new Cochlea(SampleRate, fftSize: 512, melBands: MelBands);
 // scale-free (NLMS, finding 013), so no per-input tuning.
 var level0 = new Unit(new LearnedPredictiveRule(MelBands, stateWidth: 8, history: 8, quadraticFeatures: 0));
 
-if (args.Length >= 2 && args[0].EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+if (args.Length >= 2 && args[0] == "--segment" && args[1].EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
+    SegmentFile(args[1], cochlea, level0);
+else if (args.Length >= 2 && args[0].EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
     AuditionScene(args[0], args[1], cochlea);
 else if (args.Length == 1 && args[0].EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
     AuditionFile(args[0], cochlea, level0);
 else
     LiveMicrophone(cochlea, level0);
 return;
+
+// ---- segment mode: where does the unsupervised segmenter fire? ------------------------------
+static void SegmentFile(string path, Cochlea cochlea, Unit level0)
+{
+    var samples = WavReader.ReadMono(path, SampleRate);
+    var frames = samples.Length / Hop;
+    var pos = 0;
+    float[] Pull() { var b = new float[Hop]; for (var i = 0; i < Hop && pos < samples.Length; i++) b[i] = samples[pos++]; return b; }
+    var audio = new AudioStream(Pull, cochlea, Hop, normalize: false);
+
+    var surprise = new float[frames];
+    var loud = new float[frames];
+    for (var t = 0; t < frames; t++)
+    {
+        var rms = 0f;
+        for (var i = 0; i < Hop && t * Hop + i < samples.Length; i++) { var s = samples[t * Hop + i]; rms += s * s; }
+        loud[t] = MathF.Sqrt(rms / Hop);
+        surprise[t] = level0.Observe(audio.Next()).SquaredError;
+    }
+
+    double mean = surprise.Average();
+    var sd = Math.Sqrt(surprise.Sum(x => (x - mean) * (x - mean)) / frames);
+    var boundaries = new HashSet<int>();
+    for (var t = 1; t < frames - 1; t++)
+        if (surprise[t] > surprise[t - 1] && surprise[t] >= surprise[t + 1] && surprise[t] > mean + 0.5 * sd) boundaries.Add(t);
+
+    Console.WriteLine($"\n  {Path.GetFileName(path)} — {frames / 100f:F1}s");
+    Console.WriteLine($"  {boundaries.Count} boundaries = {boundaries.Count / (frames / 100f):F1}/s (unsupervised — surprise peaks)\n");
+    Console.WriteLine("  time   loudness            boundaries");
+    const int bucket = 50;
+    var maxL = loud.DefaultIfEmpty(1).Max();
+    for (var b = 0; b * bucket < frames; b++)
+    {
+        float l = 0; var nb = 0; var cnt = 0;
+        for (var i = b * bucket; i < (b + 1) * bucket && i < frames; i++) { l += loud[i]; if (boundaries.Contains(i)) nb++; cnt++; }
+        Console.WriteLine($"  {b * bucket / 100f,4:F1}s  {new string('#', (int)(l / cnt / maxL * 20)),-20}{new string('|', nb)}");
+    }
+    Console.WriteLine();
+}
 
 // ---- scene mode: alternate two files, does a slow level track WHICH is playing? -------------
 static void AuditionScene(string pathA, string pathB, Cochlea cochlea)

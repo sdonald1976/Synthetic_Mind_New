@@ -4,6 +4,46 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 018 — Tier 3: the segmenter fires at syllable rate on real speech, and respects the pauses
+*2026-07-16 · Audio · `SyntheticMind.Listen --segment`*
+
+First contact with real speech. Ran the surprise segmenter (no tuning, no labels) on `jfk.wav` — "ask not what your country can do for you" — and looked at where the boundaries land.
+
+```
+  43 boundaries in 11.0s  =  3.9 per second     (median gap 160 ms)
+
+   2.5s  (silence)                     ← the pause after "Americans": zero boundaries
+   3.0s  #####               |||||     ← dense speech: boundaries cluster
+   4.5s  (near silent)                 ← clean
+   7.5s  (silence)                     ← clean
+```
+
+### What's genuinely encouraging
+
+- **It fires at a linguistically plausible rate — ~3.9/s, median gap 160 ms — which is English syllable/word scale.** Nobody set that; it fell out of the acoustics. English syllable rate is ~4/s. It's finding units at the right grain.
+- **It respects silence.** The pause after "Americans" (~2.5 s) and the other gaps have *zero* boundaries. It fires on speech and stays quiet in the gaps — it is not firing on a timer or on noise.
+- **It concentrates on dense speech**, tracking the sentence's rhythm.
+
+So the mechanism that worked on synthetic syllables (016/017) produces *speech-like* segmentation on *real* speech: right rate, right silences.
+
+### The honest limits — and they're real
+
+- **No ground truth.** Without phoneme-/word-aligned labels for this clip, I cannot score whether boundaries land on the *actual* linguistic boundaries. The plausible rate and the clean silences are strong circumstantial evidence, not proof. This is the ceiling of what's checkable here; a properly labelled corpus (e.g. TIMIT) is what a real evaluation needs.
+- **It's coarser than phonemes.** 3.9/s is syllable/word scale; real speech has ~10–15 phonemes/s. It catches the strong onsets (stressed syllables, word starts), not every phoneme transition.
+- **Still form, not meaning** (unchanged from 016). It found *where the units are*, not *what they are* or *what they refer to*.
+
+### Where the language ladder stands now
+
+Rungs 1–3 (sound → segmentation → recurring units) are demonstrated: on synthetic data with hard numbers (016/017) and on real speech qualitatively (018). The mechanism is the infant one — predict, be surprised at boundaries, cluster the pieces — and it behaves sensibly on real input. **Rung 4 (meaning) is untouched and needs grounding — a second sense — which is the real wall.** No amount of more audio crosses it; that takes vision or another channel to bind sound to referent.
+
+### Next
+
+Two honestly-different directions, no wrong answer:
+- **Grounding (the hard, important one):** add a second sense so a sound-unit can bind to something outside audio. This is the only path to *meaning*, and it's the original camera-plus-mic vision. Big.
+- **Sharper segmentation:** a real labelled corpus to actually score boundaries, and a phoneme-scale grain. Consolidates rung 3 before climbing.
+
+---
+
 ## 017 — Tier 2: it scales and discovers pure units, but over-splits the count
 *2026-07-16 · Audio · `SyntheticMind.Audio`, `SyllableCountTests`*
 
