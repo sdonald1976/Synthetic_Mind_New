@@ -4,6 +4,63 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 008 — Why it's fragile, run to ground: the max-variance encoder is the bottleneck
+*2026-07-16 · Predictive hierarchy · `SyntheticMind.Lab`, `FrontierTests`*
+
+Finding 007 left the meta-regime recoverable but fragile (3/6 seeds). This is the hunt for why, by elimination. The answer turned out to be the encoder itself, and the smoking gun is unambiguous.
+
+### The smoking gun
+
+Feed the learned level-1 encoder a signal that *already* correlates 0.5 with the hidden meta-regime, and measure what comes out:
+
+```
+  corr(input to encoder, meta):   0.53, 0.43, 0.47   (the latent is right there)
+  corr(encoder output,   meta):   0.00, 0.00, 0.00   (it comes out as nothing)
+```
+
+The max-variance (Hebbian/PCA) encoder takes a signal in which the slow latent is the *dominant* structure and outputs zero correlation with it. It chases fast, high-energy variance and structurally discards a slow, smooth latent even when handed it on a platter. **That is the whole fragility.**
+
+### Five fixes, falsified — which is how the bottleneck got localized
+
+| Attempt | Result | So it's not… |
+|---|---|---|
+| More nonlinear features (64→512) | *worse* — 512 collapses to ~0 | …feature supply (more just adds fast distractors) |
+| Wider state (keep more components) | marginal (0.15→0.19) | …dropped low-variance components |
+| Slowness objective at level 1 | *worse* (0.078) | …needing the *slowest* feature (meta is a *medium* timescale) |
+| Slower mean-centering | no change (still 0.00) | …the encoder cancelling slow input as baseline |
+| Change-energy fed to the learned encoder | 0.00 | …the input lacking the signal (it has it at 0.5) |
+
+Every fix improved the *input* to the encoder or its settings. None helped, because the encoder is where the signal dies.
+
+### The robust path — around the encoder, not through it
+
+The same latent is recovered on **every** seed by two temporal primitives the architecture didn't have, used *instead of* the learned encoder:
+
+1. **Change-sensing.** Measure how much the lower level's state moves *within* a window, not its average. Mean pooling erases the switching-rate; change-energy pooling preserves it. (`TemporalPool` gained a `ChangeEnergy` mode — and the finding is that *which summary you pool* determines *which latent survives*.)
+2. **Leaky integration.** Smooth the noisy per-window change-energy over a long time constant to expose the slow mean underneath. (New `LeakyIntegrator`.)
+
+```
+  change-energy + integration vs meta:  ~0.4–0.5 on every seed  (was: 0.01 min, learned encoder)
+```
+
+Pinned in `Change_sensing_plus_integration_robustly_recovers_the_meta_regime` (all four seeds > 0.3).
+
+### The honest headline, and the tension it creates
+
+Fragility is **solved as detection** and **localized as learning**. We can now robustly extract the slow latent — but with *fixed* temporal primitives, not the *learned* encoder. The learned max-variance encoder cannot do it, definitively.
+
+That sharpens the whole project to one question: **the higher-level learning rule is wrong.** Max-variance was the right first choice (it can't collapse — finding 003) but it is blind to slow structure, which is exactly what higher levels are supposed to find. This is not a tuning problem; it's the objective.
+
+### Next
+
+Two honest options, and they're a real fork:
+- **Accept fixed temporal primitives as part of the architecture.** Biology has non-learned adaptation and integration everywhere. Higher levels could apply change-sensing + integration as built-in operations and *learn on top of* them. Pragmatic, robust, slightly less pure.
+- **Replace the higher-level objective.** Find a learning rule that keeps max-variance's anti-collapse property but preferentially represents slow structure — a genuinely open research problem (proper whitened SFA, predictive-information objectives, or something new).
+
+Either way, finding 008 is the turning point: the fragility was never in the features, the clock, or the wiring. It was the encoder, and now we know it.
+
+---
+
 ## 007 — Stacking earns its keep — but only sometimes. The core thesis is real and fragile.
 *2026-07-16 · Predictive hierarchy · `SyntheticMind.Lab`, `FrontierTests`*
 

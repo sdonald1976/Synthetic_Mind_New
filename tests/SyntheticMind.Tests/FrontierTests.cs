@@ -65,6 +65,42 @@ public class FrontierTests
         Assert.True(level1Meta > level0Meta + 0.2f, $"level 1 ({level1Meta:F3}) should clearly beat level 0 ({level0Meta:F3})");
     }
 
+    [Fact]
+    public void Change_sensing_plus_integration_robustly_recovers_the_meta_regime()
+    {
+        // Finding 008's robust path. The learned max-variance encoder gets ~0 on the meta-regime
+        // even when handed a signal that correlates 0.5 with it — it discards slow structure. The
+        // two temporal primitives it lacks recover it on EVERY seed: sense how much the lower level
+        // changes within a window (change-energy pooling, since Mean pooling erases it), then
+        // integrate that slowly (to average out per-window noise and expose the slow latent).
+        foreach (var seed in new[] { 1, 2, 3, 4 })
+        {
+            var stream = new NestedRegimeStream(2, seed);
+            stream.Reset();
+            var level0 = new Unit(new LearnedPredictiveRule(2, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64, seed: seed));
+            var pool = new TemporalPool(16, 4, PoolMode.ChangeEnergy);
+            var integrator = new LeakyIntegrator(4, rate: 0.05f);
+
+            var detector = new List<float[]>();
+            var metas = new List<float>();
+            var current = new float[4];
+
+            for (var t = 0; t < Ticks; t++)
+            {
+                var meta = stream.MetaRegime;
+                var s0 = level0.Observe(stream.Next()).State;
+                var pooled = pool.Push(s0);
+                if (pooled != null) current = integrator.Push(pooled);
+                if (t < Ticks - Window) continue;
+                detector.Add((float[])current.Clone());
+                metas.Add(meta);
+            }
+
+            var corr = MaxAbsCorrelation(detector, metas);
+            Assert.True(corr > 0.3f, $"seed {seed}: change+integration should recover meta, got {corr:F3}");
+        }
+    }
+
     // Max over state dimensions of |Pearson correlation| with the target.
     private static float MaxAbsCorrelation(List<float[]> states, List<float> target)
     {
