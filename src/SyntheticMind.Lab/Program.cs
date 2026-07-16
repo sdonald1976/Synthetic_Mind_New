@@ -195,6 +195,54 @@ foreach (var (slow, fast, note) in new[]
 }
 Console.WriteLine();
 
+Console.WriteLine("  ── the frontier: does STACKING earn its keep? ─────────────");
+Console.WriteLine();
+Console.WriteLine("  Nested stream: a meta-regime secretly sets how OFTEN the frequency-regime flips.");
+Console.WriteLine("  It leaves no trace in any short window, so level 0 is blind to it by construction.");
+Console.WriteLine("  Level 1 runs on a slower clock (pooled over time). Can it recover what level 0 can't?");
+Console.WriteLine();
+
+const int NestedTicks = 100_000;
+const int NestedWindow = 60_000;
+const int Stride = 32;
+
+var metaHits = 0;
+for (var seed = 1; seed <= 4; seed++)
+{
+    var stream = new NestedRegimeStream(2, seed);
+    stream.Reset();
+    var level0 = new Unit(new LearnedPredictiveRule(2, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64, seed: seed));
+    var pool = new TemporalPool(Stride, 4);
+    var level1 = new Unit(new LearnedPredictiveRule(4, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64, seed: seed));
+    var level1State = new float[4];
+
+    var l0States = new List<float[]>();
+    var l1States = new List<float[]>();
+    var metas = new List<float>();
+
+    for (var t = 0; t < NestedTicks; t++)
+    {
+        var meta = stream.MetaRegime;
+        var s0 = level0.Observe(stream.Next()).State;
+        var pooled = pool.Push(s0);
+        if (pooled != null) level1State = level1.Observe(pooled).State;
+        if (t < NestedTicks - NestedWindow) continue;
+        l0States.Add(s0);
+        l1States.Add((float[])level1State.Clone());
+        metas.Add(meta);
+    }
+
+    var l0Meta = MaxAbsCorrelation(l0States, metas);
+    var l1Meta = MaxAbsCorrelation(l1States, metas);
+    if (l1Meta > 0.25f) metaHits++;
+    Console.WriteLine($"  seed {seed}:  level 0 (fast) sees meta {l0Meta:F3}   level 1 (slow clock) sees meta {l1Meta:F3}" +
+                      $"   {(l1Meta > 0.25f ? "← discovered" : "")}");
+}
+Console.WriteLine();
+Console.WriteLine($"  verdict: level 0 is reliably blind; level 1 discovered the meta-regime on {metaHits}/4 seeds.");
+Console.WriteLine("  Real but FRAGILE — the slower clock opens the door, but recovery isn't yet reliable.");
+Console.WriteLine();
+
 // Max over state dimensions of |Pearson correlation| between that dimension and the regime.
 static float MaxAbsCorrelation(List<float[]> states, List<float> target)
 {

@@ -170,3 +170,91 @@ public sealed class RegimeOscillatorStream : IStream
         _ticksLeft = _random.Next(MinDwell, MaxDwell);
     }
 }
+
+/// <summary>
+/// Three nested timescales, built to test the one claim the project hasn't earned yet
+/// (SCAFFOLD.md §3): does stacking make a higher level discover something a lower level cannot?
+///
+///   - FAST:  the wiggle (sin/cos), every tick
+///   - SLOW:  the regime — frequency is 0.5 or 1.2, flipping every so often
+///   - SLOWER: the meta-regime — it controls HOW OFTEN the regime flips (rarely vs. often)
+///
+/// The point is what the meta-regime is NOT. It doesn't change the frequencies — both 0.5 and 1.2
+/// appear under either meta-regime — so no short window can reveal it. The only trace of it is the
+/// *switching rate*, which is invisible unless you watch over a long stretch. A unit with a short
+/// temporal window (level 0) therefore CANNOT recover the meta-regime, by construction. Only a
+/// unit that sees a long stretch of time can. That's the clean test: if a slowed-down level 1
+/// recovers the meta-regime that level 0 provably can't, stacking earned its keep.
+///
+/// <see cref="Regime"/> and <see cref="MetaRegime"/> are exposed for scoring only, never as input.
+/// </summary>
+public sealed class NestedRegimeStream : IStream
+{
+    private const float SlowFreq = 0.5f;
+    private const float FastFreq = 1.2f;
+    private const int MetaMinDwell = 1500;   // the meta-regime — the slowest timescale
+    private const int MetaMaxDwell = 2500;
+    private const int RareMin = 250;          // regime dwell when meta says "switch rarely"
+    private const int RareMax = 350;
+    private const int OftenMin = 50;          // regime dwell when meta says "switch often"
+    private const int OftenMax = 90;
+
+    private readonly int _width;
+    private readonly int _seed;
+    private Random _random = null!;
+    private float _phase;
+    private int _regime;
+    private int _meta;
+    private int _regimeTicksLeft;
+    private int _metaTicksLeft;
+
+    public NestedRegimeStream(int width = 2, int seed = 1)
+    {
+        _width = width;
+        _seed = seed;
+        Reset();
+    }
+
+    public string Name => "nested-regime";
+    public int Width => _width;
+
+    /// <summary>Fast-ish hidden latent: which frequency is playing now (0 or 1).</summary>
+    public float Regime => _regime;
+
+    /// <summary>Slowest hidden latent: whether the regime is switching rarely (0) or often (1).</summary>
+    public float MetaRegime => _meta;
+
+    public float[] Next()
+    {
+        if (_metaTicksLeft <= 0)
+        {
+            _meta = 1 - _meta;
+            _metaTicksLeft = _random.Next(MetaMinDwell, MetaMaxDwell);
+        }
+        _metaTicksLeft--;
+
+        if (_regimeTicksLeft <= 0)
+        {
+            _regime = 1 - _regime;
+            _regimeTicksLeft = _meta == 0 ? _random.Next(RareMin, RareMax) : _random.Next(OftenMin, OftenMax);
+        }
+        _regimeTicksLeft--;
+
+        _phase += _regime == 0 ? SlowFreq : FastFreq;
+
+        var v = new float[_width];
+        v[0] = MathF.Sin(_phase);
+        if (_width > 1) v[1] = MathF.Cos(_phase);
+        return v;
+    }
+
+    public void Reset()
+    {
+        _random = new Random(_seed);
+        _phase = 0f;
+        _regime = 0;
+        _meta = 0;
+        _regimeTicksLeft = _random.Next(RareMin, RareMax);
+        _metaTicksLeft = _random.Next(MetaMinDwell, MetaMaxDwell);
+    }
+}

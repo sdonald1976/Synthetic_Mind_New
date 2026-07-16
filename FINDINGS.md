@@ -4,6 +4,47 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 007 — Stacking earns its keep — but only sometimes. The core thesis is real and fragile.
+*2026-07-16 · Predictive hierarchy · `SyntheticMind.Lab`, `FrontierTests`*
+
+The direct assault on SCAFFOLD.md §3, the one claim the project hadn't earned: does stacking make a higher level discover structure a lower level cannot? Everything before this was groundwork for this test.
+
+**The setup.** Two new pieces:
+- `NestedRegimeStream`: three nested timescales. A fast wiggle; a *regime* that flips its frequency (0.5 ↔ 1.2); and a *meta-regime* that secretly controls how OFTEN the regime flips. The meta-regime is designed to leave no trace in any short window — both frequencies occur under either meta-regime — so its only signature is the switching *rate*, visible only over a long stretch. A short-window unit is therefore blind to it by construction.
+- `TemporalPool`: a slower clock. It averages the lower level's state over a window and wakes the upper level once per window, forcing level 1 to see a longer timescale than level 0. This is the ingredient finding 006 said was missing.
+
+**The result** (correlation of each level's state with the hidden meta-regime, mean pooling, stride 32):
+
+```
+  seed:      1      2      3      4      5      6      mean
+  level 0:  0.003  0.017  0.014  0.009  0.004  0.010   0.009   (blind, by construction)
+  level 1:  0.378  0.039  0.087  0.071  0.331  0.338   0.207   (fragile)
+```
+
+### What this shows — genuinely, for the first time
+
+**Level 0 is reliably blind to the meta-regime (0.009), and on several seeds level 1 recovers it (0.33–0.38).** Same stream, same meta schedule, same measurement window — the *only* difference between the two levels is temporal reach. So the recovery cannot be a leak or a windowing artifact: if it were, level 0 (which sees the identical schedule) would show it too, and it never does. The slower clock genuinely opened access to structure the lower level cannot reach. That is the core thesis demonstrated — the first time in this project a higher level has discovered something a lower one provably can't.
+
+### What this does NOT show — and I won't pretend otherwise
+
+**It's fragile.** Three of six seeds work (0.33–0.38); three barely do (0.04–0.09). The variance encoder isn't *seeking* the meta-regime — it's hoping its random product features happen to include one that tracks switching rate. When luck obliges, it works; when not, it doesn't. Compare finding 006, where single-unit regime detection held at 0.77–0.83 on *every* seed. This is nowhere near that solid.
+
+**Two attempts to make it robust failed:**
+- *Slowness objective at level 1* (the meta-regime is slow, so a slowness-seeker should target it): **worse**, 0.078 mean, no seed above 0.12. The meta-regime is a *medium* timescale, not the slowest thing present, so a slowness-seeker overshoots into slower noise.
+- *Variance-aware pooling* (mean+variance instead of mean, to preserve switching-rate information): **worse**, collapsed to ~0. The extra channels drew the max-variance encoder onto themselves and drowned the faint meta signal.
+
+### The honest headline
+
+The slower clock is the right idea and it is **necessary** — without it level 1 sees nothing new. It is not yet **sufficient** for reliable abstraction. Stacking can earn its keep; making it *always* earn its keep is unsolved, and the two obvious fixes made it worse, which means the answer isn't obvious.
+
+Pinned in tests: `Level0_is_blind_to_the_meta_regime` (robust, all seeds) and `A_slowed_level1_can_recover_what_level0_cannot` (on a known-good seed — documents possibility, not reliability).
+
+### Next
+
+The open problem is now sharp and specific: **reliably extract a medium-timescale latent from a pooled stream.** Threads worth pulling — an encoder objective that targets a *band* of timescales rather than max-variance (fast) or max-slowness; a predictor that must forecast many pooled steps ahead (forcing the state to hold the meta-regime); or multiple upper units at different strides so some clock is always matched to the latent. This is a real research problem, not a tuning knob — which is the most interesting place the project has reached.
+
+---
+
 ## 006 — The win holds up: robust across seeds, and it's really reading frequency
 *2026-07-16 · Predictive hierarchy v1 · `SyntheticMind.Lab`, `RegimeTests`*
 
