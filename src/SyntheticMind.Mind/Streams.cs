@@ -114,22 +114,27 @@ public sealed class BouncingBallStream : IStream
 /// </summary>
 public sealed class RegimeOscillatorStream : IStream
 {
-    private const float SlowFreq = 0.50f;   // radians/tick in regime 0 (~12-tick cycle)
-    private const float FastFreq = 1.20f;   // radians/tick in regime 1 (~5-tick cycle)
     private const int MinDwell = 150;       // regimes last this long, at least — the slow timescale
     private const int MaxDwell = 350;
 
     private readonly int _width;
     private readonly int _seed;
+    private readonly float _slowFreq;       // radians/tick in regime 0
+    private readonly float _fastFreq;       // radians/tick in regime 1
     private Random _random = null!;
     private float _phase;
     private int _regime;
     private int _ticksLeft;
 
-    public RegimeOscillatorStream(int width = 4, int seed = 1)
+    /// <param name="slowFreq">Regime-0 frequency. Set equal to <paramref name="fastFreq"/> for a
+    /// negative control: the regime still switches but the observation is identical, so a faithful
+    /// detector must score ~chance. Move the two together to make the task harder.</param>
+    public RegimeOscillatorStream(int width = 4, int seed = 1, float slowFreq = 0.50f, float fastFreq = 1.20f)
     {
         _width = width;
         _seed = seed;
+        _slowFreq = slowFreq;
+        _fastFreq = fastFreq;
         Reset();
     }
 
@@ -148,7 +153,7 @@ public sealed class RegimeOscillatorStream : IStream
         }
         _ticksLeft--;
 
-        _phase += _regime == 0 ? SlowFreq : FastFreq;
+        _phase += _regime == 0 ? _slowFreq : _fastFreq;
 
         var v = new float[_width];
         v[0] = MathF.Sin(_phase);

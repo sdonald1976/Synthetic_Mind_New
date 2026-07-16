@@ -13,9 +13,9 @@ public class RegimeTests
     private const int Window = 4_000;
 
     // Max over state dimensions of |Pearson correlation| with the hidden regime.
-    private static float RegimeCorrelation(LearnedPredictiveRule rule)
+    private static float RegimeCorrelation(LearnedPredictiveRule rule, float slowFreq = 0.5f, float fastFreq = 1.2f, int streamSeed = 1)
     {
-        var stream = new RegimeOscillatorStream(2);
+        var stream = new RegimeOscillatorStream(2, streamSeed, slowFreq, fastFreq);
         stream.Reset();
         var unit = new Unit(rule);
         var states = new List<float[]>();
@@ -66,6 +66,27 @@ public class RegimeTests
         // Same unit, plus nonlinear product features. This is the "after" — and the whole point.
         var nonlinear = new LearnedPredictiveRule(2, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64);
         Assert.True(RegimeCorrelation(nonlinear) > 0.5f, "a nonlinear unit should recover the hidden regime");
+    }
+
+    [Fact]
+    public void The_negative_control_finds_nothing()
+    {
+        // Both regimes at the SAME frequency: the label still switches, but the observation is
+        // identical, so there is genuinely nothing to detect. If the unit still "finds" the regime,
+        // the recovery elsewhere is a leak or an artifact of slow-drift, not real detection. It
+        // must score chance. This is the control that makes the positive result trustworthy.
+        var unit = new LearnedPredictiveRule(2, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64);
+        Assert.True(RegimeCorrelation(unit, slowFreq: 0.8f, fastFreq: 0.8f) < 0.25f,
+            "with nothing to detect, correlation must fall to chance");
+    }
+
+    [Fact]
+    public void Recovery_holds_on_a_different_seed()
+    {
+        // Guards against a lucky-seed result: a fresh stream seed and a fresh set of random
+        // product features must still recover the regime.
+        var unit = new LearnedPredictiveRule(2, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64, seed: 5);
+        Assert.True(RegimeCorrelation(unit, streamSeed: 5) > 0.5f, "recovery should not depend on a particular seed");
     }
 
     [Fact]

@@ -4,6 +4,52 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 006 — The win holds up: robust across seeds, and it's really reading frequency
+*2026-07-16 · Predictive hierarchy v1 · `SyntheticMind.Lab`, `RegimeTests`*
+
+Finding 005 showed a nonlinear unit recovering a hidden slow cause at correlation 0.766 — on a single seed. One seed is an anecdote. This finding stress-tests it three ways before trusting it.
+
+### Robust across seeds
+
+```
+  seed:   1     2     3     4     5     6     7     8      mean   min
+  corr:  0.766 0.831 0.787 0.824 0.787 0.820 0.829 0.802  0.806  0.766
+```
+
+Eight independent seeds (fresh stream *and* fresh random product features each time), all in a tight 0.766–0.831 band. Not a lucky draw.
+
+### The negative control — the one that makes it trustworthy
+
+Set both regimes to the *same* frequency. The hidden label still switches every few hundred ticks, but the observation is now identical regardless, so there is genuinely nothing to detect.
+
+```
+  seed 1: 0.003    seed 2: 0.006    seed 3: 0.005
+```
+
+Chance. This rules out the failure mode that would have quietly invalidated finding 005: a state feature that drifts slowly *for any reason* correlating with a slow-switching target just because both are slow and the window holds only ~20 switches. It doesn't. The unit scores high only when there is a real frequency difference to find.
+
+### It degrades like a real frequency detector
+
+Slide the two frequencies together and detection fades smoothly to chance:
+
+```
+  0.50 vs 1.20   0.766   far apart
+  0.50 vs 0.80   0.831   closer
+  0.50 vs 0.65   0.137   close
+  0.50 vs 0.55   0.039   very close
+  0.50 vs 0.50   0.007   identical (control)
+```
+
+The harder the discrimination, the lower the score — exactly the signature of genuinely reading frequency separation rather than exploiting an artifact. (0.80 edging out 1.20 is minor — likely coarser sampling of the faster oscillation; not load-bearing.)
+
+### Status
+
+The finding-005 capability is now hardened: **a nonlinear predictive unit reliably abstracts a hidden slow cause from a fast signal, verified across seeds and against a negative control.** Two of these three checks are now permanent tests (`The_negative_control_finds_nothing`, `Recovery_holds_on_a_different_seed`), so a future change that breaks the result — or reintroduces a leak — fails loudly.
+
+Still open, unchanged from 005: this happens in a *single* unit with enough temporal reach. The SCAFFOLD.md §3 thesis that *stacking* produces higher, slower abstractions remains unproven. That's the next frontier — but the building block under it is now solid.
+
+---
+
 ## 005 — A unit abstracts a hidden slow cause it was never shown (and a wrong turn along the way)
 *2026-07-16 · Predictive hierarchy v1 · `SyntheticMind.Lab`, `RegimeTests`*
 

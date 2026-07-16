@@ -162,6 +162,39 @@ foreach (var drive in new[] { EncoderDrive.Variance, EncoderDrive.Slowness })
 }
 Console.WriteLine();
 
+Console.WriteLine("  ── hardening: is it really reading frequency? ─────────────");
+Console.WriteLine();
+Console.WriteLine("  As the two regime frequencies converge, detection should fade to chance.");
+Console.WriteLine("  The last row (identical frequencies) is the negative control: nothing to find.");
+Console.WriteLine();
+
+foreach (var (slow, fast, note) in new[]
+         {
+             (0.50f, 1.20f, "far apart"),
+             (0.50f, 0.80f, "closer"),
+             (0.50f, 0.65f, "close"),
+             (0.50f, 0.55f, "very close"),
+             (0.50f, 0.50f, "identical — control"),
+         })
+{
+    var stream = new RegimeOscillatorStream(OscWidth, 1, slow, fast);
+    stream.Reset();
+    var unit = new Unit(new LearnedPredictiveRule(OscWidth, stateWidth: 4, drive: EncoderDrive.Variance, history: 16, quadraticFeatures: 64));
+    var states = new List<float[]>();
+    var regimes = new List<float>();
+    for (var t = 0; t < Ticks; t++)
+    {
+        var regime = stream.Regime;
+        var tick = unit.Observe(stream.Next());
+        if (t < Ticks - Window) continue;
+        states.Add(tick.State);
+        regimes.Add(regime);
+    }
+    var corr = MaxAbsCorrelation(states, regimes);
+    Console.WriteLine($"  freq {slow:F2} vs {fast:F2}  corr {corr:F3}   {note}");
+}
+Console.WriteLine();
+
 // Max over state dimensions of |Pearson correlation| between that dimension and the regime.
 static float MaxAbsCorrelation(List<float[]> states, List<float> target)
 {
