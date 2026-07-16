@@ -4,6 +4,42 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 022 — Cross-modal binding survives the mess, and it fails in exactly one place
+*2026-07-16 · Cross-modal · `SyntheticMind.Mind.CrossSituationalBinder`, `CrossSituationalTests`*
+
+Finding 021 bound heard-to-seen on *clean* co-occurrence (one object per episode). The real world is ambiguous: many things at once, no single moment telling you which sound goes with which sight. This is the honest test of whether binding survives that — via cross-situational learning (Yu & Smith), the leading account of how infants learn words: the true pairing is the one that stays consistent across episodes, recovered by pointwise mutual information.
+
+```
+  8 objects, 3 present per episode.  binding accuracy (chance 12%):
+    ambiguity + missing modality + spurious pairs      100%
+    weak pairing — correct sight present only 30%       100%  (500 episodes)
+    weak pairing 15%                                     84%
+    exposure needed (clean pairing)                     100% by 20 episodes
+    the hard corner: 30% pairing, 100 episodes           92%
+```
+
+### The result — it's more robust than expected
+
+**Cross-situational binding shrugs off the mess.** Multiple objects at once, missing modalities, spurious distractors, and a pairing that only holds 30% of the time — it still recovers the true mapping, and it's data-efficient (tens of episodes, not thousands). PMI is why: normalizing by base rates means a weak-but-*consistent* correlation beats a frequent-but-incidental one. This is exactly why infants learn words from genuinely ambiguous input — the mechanism is real and it works. It only frays at extreme weakness (15% co-occurrence).
+
+### The one place it genuinely fails — and it's a real limit, not a bug
+
+**Perfectly correlated distractors.** If two objects *always* appear together, no statistic on earth can tell which sound goes with which sight — their co-occurrence with each other's referent is identical. The binder correctly collapses a glued pair into an unresolvable set while still recovering every independent object. This isn't a flaw to fix; it's a true property of the problem (you cannot disambiguate two things you've never seen apart), and it's pinned as a test so it stays honest.
+
+### What this settles, and what it doesn't
+
+- **Settled:** the *binding* mechanism is not the bottleneck for grounding. Given identified units, recovering their cross-modal pairings under real ambiguity is robust and cheap. The rung-4 wall is not here.
+- **Not settled — and this is where the wall actually is:** this test assumes the *units are already identified* (clustering solved — findings 016/017). The hard part of real grounding is the **perception under mess** — segmenting and clustering units correctly when the world is continuous, noisy, and overlapping — and **scale** (thousands of concepts, correlated co-occurrence, limited grounded experience). The binding statistics were never the hard part; identifying *what* to bind, at scale, is.
+
+So the honest map of grounding sharpens: binding — solved and robust. Perception-under-mess and scale — the real remaining frontier.
+
+### Next
+
+- **Join the two ends:** cluster real (noisy) audio+video summaries into units *and* cross-situationally bind them, in one unsupervised pipeline — does binding survive real clustering error, not just assumed-clean units?
+- **The live version:** mic + webcam together — grounding what's actually in the room.
+
+---
+
 ## 021 — Cross-modal grounding: meaning without a teacher (rung 4)
 *2026-07-16 · Cross-modal · `SyntheticMind.Mind.CrossModalStore`, `CrossModalTests`*
 
