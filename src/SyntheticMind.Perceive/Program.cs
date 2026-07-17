@@ -34,7 +34,6 @@ var eyeOk = false;
 var earSummary = new float[MelBands];      // rolling average of recent mel frames (perception)
 var eyeSummary = new float[VisualWidth];   // rolling average of recent retina frames
 var bindings = new List<(float[] Audio, float[] Visual)>();
-var status = "ready — teach me something (SPACE while making a sound + a gesture)";
 
 // ---- EAR ------------------------------------------------------------------------------------
 var samples = new Queue<float>();
@@ -136,42 +135,45 @@ int Nearest(float[] q, Func<(float[] Audio, float[] Visual), float[]> key)
     return best;
 }
 static string Bar(float v, float scale) => new('#', Math.Clamp((int)(v * scale), 0, 20));
+var consoleGate = new object();
 
-while (running)
+// Dedicated blocking key-reader thread — more reliable than polling KeyAvailable, and it prints
+// feedback for EVERY key so we can see whether input reaches the program at all.
+var inputThread = new Thread(() =>
 {
-    if (Console.KeyAvailable)
+    while (running)
     {
-        var key = Console.ReadKey(true).Key;
+        ConsoleKeyInfo info;
+        try { info = Console.ReadKey(true); }
+        catch { Thread.Sleep(100); continue; }   // input not available in this terminal
+
         float[] a, v;
         lock (gate) { a = (float[])earSummary.Clone(); v = (float[])eyeSummary.Clone(); }
 
-        switch (key)
+        string msg = info.Key switch
         {
-            case ConsoleKey.Q or ConsoleKey.Escape:
-                running = false;
-                break;
-            case ConsoleKey.Spacebar:
-                bindings.Add((a, v));
-                status = $"bound pair #{bindings.Count - 1}  (total {bindings.Count})";
-                break;
-            case ConsoleKey.A when bindings.Count > 0:
-                status = $"HEARD -> matches pair #{Nearest(a, b => b.Audio)}  (its sight is what goes with this sound)";
-                break;
-            case ConsoleKey.V when bindings.Count > 0:
-                status = $"SAW -> matches pair #{Nearest(v, b => b.Visual)}  (its sound is what goes with this sight)";
-                break;
-            case ConsoleKey.A or ConsoleKey.V:
-                status = "nothing bound yet — press SPACE to teach a pair first";
-                break;
-        }
-        if (running) Console.WriteLine($"\n  >> {status}");
-    }
+            ConsoleKey.Q or ConsoleKey.Escape => "quitting",
+            ConsoleKey.Spacebar => $"BOUND pair #{bindings.Count} (total {bindings.Count + 1})",
+            ConsoleKey.A when bindings.Count > 0 => $"HEARD -> matches pair #{Nearest(a, b => b.Audio)}",
+            ConsoleKey.V when bindings.Count > 0 => $"SAW   -> matches pair #{Nearest(v, b => b.Visual)}",
+            ConsoleKey.A or ConsoleKey.V => "nothing bound yet — press SPACE first",
+            _ => $"got key '{info.Key}'  (SPACE = bind, A/V = recall, Q = quit)",
+        };
+        if (info.Key == ConsoleKey.Spacebar) bindings.Add((a, v));
+        if (info.Key is ConsoleKey.Q or ConsoleKey.Escape) running = false;
 
+        lock (consoleGate) Console.WriteLine($"\n  >> {msg}");
+    }
+}) { IsBackground = true };
+inputThread.Start();
+
+while (running)
+{
     float ear, eye; bool ready;
     lock (gate) { ear = earSurprise; eye = eyeSurprise; ready = eyeOk; }
     var eyeCol = ready ? $"{eye,7:F3} {Bar(eye, 300f),-20}" : "(no camera)        ";
-    Console.Write($"\r  EAR {ear,7:F3} {Bar(ear, 40f),-20}   EYE {eyeCol}   bound:{bindings.Count} ");
-    Thread.Sleep(50);
+    lock (consoleGate) Console.Write($"\r  EAR {ear,7:F3} {Bar(ear, 40f),-20}   EYE {eyeCol}   bound:{bindings.Count} ");
+    Thread.Sleep(80);
 }
 
 mic?.StopRecording();
