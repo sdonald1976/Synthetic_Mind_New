@@ -1,3 +1,4 @@
+using System.Numerics.Tensors;
 using System.Runtime.InteropServices;
 using NAudio.Wave;
 using OpenCvSharp;
@@ -5,31 +6,37 @@ using SyntheticMind.Audio;
 using SyntheticMind.Mind;
 using SyntheticMind.Vision;
 
-// Live: listen and watch at the SAME time, on real hardware.
+// Live cross-modal grounding: listen and watch at once, and BIND what's heard to what's seen.
 //   dotnet run --project src/SyntheticMind.Perceive
 //
-// Two senses run at their own rates through the same architecture:
-//   EAR   — microphone → cochlea → level 0
-//   EYE   — webcam     → retina  → level 0
-// Each shows SURPRISE (prediction error): talk or make a noise → the ear spikes; move in front of
-// the camera → the eye spikes. Both settle when things are steady. Press a key to stop.
+//   EAR: microphone -> cochlea -> level 0        EYE: webcam -> retina -> level 0
+//
+// Keys:
+//   SPACE  bind — make a distinct SOUND while doing a distinct VISUAL thing; binds the pair
+//   A      hear->see — make just the sound; it recalls which bound pair it matches
+//   V      see->hear — do just the visual; it recalls which pair it matches
+//   Q      quit
+//
+// Coarse 8x8 retina: works on GROSS visual differences (wave left vs right, lean in, cover lens),
+// not fine objects. Pair each with a distinct sound ("ahh" vs "ooo", clap, whistle).
 
-const int SampleRate = 16000, Hop = 160, MelBands = 20;
-const int CamW = 80, CamH = 60, Grid = 8;
+const int SampleRate = 16000, Hop = 160, MelBands = 20, Grid = 8, CamW = 80, CamH = 60;
+var VisualWidth = Grid * Grid * 2;
 
 Console.WriteLine();
-Console.WriteLine("  SyntheticMind — perceiving (listening + watching)");
-Console.WriteLine("  talk / make noise  -> the EAR should spike");
-Console.WriteLine("  move in view       -> the EYE should spike");
-Console.WriteLine("  press any key to stop\n");
+Console.WriteLine("  SyntheticMind — live cross-modal grounding");
+Console.WriteLine("  SPACE = bind sound+sight    A = hear->see    V = see->hear    Q = quit\n");
 
 var running = true;
 var gate = new object();
-var earSurprise = 0f;
-var eyeSurprise = 0f;
+float earSurprise = 0, eyeSurprise = 0;
 var eyeOk = false;
+var earSummary = new float[MelBands];      // rolling average of recent mel frames (perception)
+var eyeSummary = new float[VisualWidth];   // rolling average of recent retina frames
+var bindings = new List<(float[] Audio, float[] Visual)>();
+var status = "ready — teach me something (SPACE while making a sound + a gesture)";
 
-// ---- EAR: microphone -> cochlea -> level 0 --------------------------------------------------
+// ---- EAR ------------------------------------------------------------------------------------
 var samples = new Queue<float>();
 var micGate = new object();
 WaveInEvent? mic = null;
@@ -68,28 +75,29 @@ var earThread = new Thread(() =>
     var audio = new AudioStream(Pull, cochlea, Hop, normalize: false);
     while (running)
     {
-        var s = level0.Observe(audio.Next()).SquaredError;
-        lock (gate) earSurprise += 0.3f * (s - earSurprise);
+        var mel = audio.Next();
+        var s = level0.Observe(mel).SquaredError;
+        lock (gate)
+        {
+            earSurprise += 0.3f * (s - earSurprise);
+            for (var i = 0; i < MelBands; i++) earSummary[i] += 0.04f * (mel[i] - earSummary[i]);  // ~0.5s window
+        }
     }
 }) { IsBackground = true };
 if (mic is not null) earThread.Start();
 
-// ---- EYE: webcam -> retina -> level 0 -------------------------------------------------------
+// ---- EYE ------------------------------------------------------------------------------------
 var eyeThread = new Thread(() =>
 {
     VideoCapture? cam = null;
-    try { cam = new VideoCapture(0); } catch { /* handled below */ }
-    if (cam is null || !cam.IsOpened())
-    {
-        Console.WriteLine("  (no webcam found on device 0 - running ear-only)");
-        return;
-    }
+    try { cam = new VideoCapture(0); } catch { }
+    if (cam is null || !cam.IsOpened()) { Console.WriteLine("  (no webcam on device 0 - ear only)"); return; }
     lock (gate) eyeOk = true;
 
     var retina = new Retina(Grid, motion: true);
-    var level0 = new Unit(new LearnedPredictiveRule(retina.Width, stateWidth: 12, history: 6, quadraticFeatures: 0));
+    var level0 = new Unit(new LearnedPredictiveRule(VisualWidth, stateWidth: 12, history: 6, quadraticFeatures: 0));
     using var frame = new Mat();
-    using var gray = new Mat();
+    using var grayMat = new Mat();
     using var small = new Mat();
     var pixels = new float[CamW * CamH];
     var bytes = new byte[CamW * CamH];
@@ -97,31 +105,75 @@ var eyeThread = new Thread(() =>
     while (running)
     {
         if (!cam.Read(frame) || frame.Empty()) { Thread.Sleep(5); continue; }
-        Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
-        Cv2.Resize(gray, small, new Size(CamW, CamH));
+        Cv2.CvtColor(frame, grayMat, ColorConversionCodes.BGR2GRAY);
+        Cv2.Resize(grayMat, small, new Size(CamW, CamH));
         Marshal.Copy(small.Data, bytes, 0, bytes.Length);
         for (var i = 0; i < bytes.Length; i++) pixels[i] = bytes[i] / 255f;
 
-        var s = level0.Observe(retina.Process(pixels, CamW, CamH)).SquaredError;
-        lock (gate) eyeSurprise += 0.3f * (s - eyeSurprise);
+        var feat = retina.Process(pixels, CamW, CamH);
+        var s = level0.Observe(feat).SquaredError;
+        lock (gate)
+        {
+            eyeSurprise += 0.3f * (s - eyeSurprise);
+            for (var i = 0; i < VisualWidth; i++) eyeSummary[i] += 0.1f * (feat[i] - eyeSummary[i]);  // ~0.5s window
+        }
     }
     cam.Dispose();
 }) { IsBackground = true };
 eyeThread.Start();
 
-// ---- display: both senses, live ------------------------------------------------------------
-static string Bar(float v, float scale, int max) => new('#', Math.Clamp((int)(v * scale), 0, max));
-while (!Console.KeyAvailable)
+// ---- interaction + display ------------------------------------------------------------------
+float[] Unit(float[] v) { var n = TensorPrimitives.Norm<float>(v) + 1e-6f; var r = new float[v.Length]; TensorPrimitives.Divide<float>(v, n, r); return r; }
+int Nearest(float[] q, Func<(float[] Audio, float[] Visual), float[]> key)
 {
-    float ear, eye; bool eyeReady;
-    lock (gate) { ear = earSurprise; eye = eyeSurprise; eyeReady = eyeOk; }
-    var eyeCol = eyeReady ? $"{eye,7:F3} {Bar(eye, 300f, 24)}" : "(no camera)";
-    Console.Write($"\r  EAR {ear,7:F3} {Bar(ear, 40f, 24),-24}   EYE {eyeCol,-34}");
+    var u = Unit(q); var best = -1; var bd = float.MaxValue;
+    for (var i = 0; i < bindings.Count; i++)
+    {
+        var k = Unit(key(bindings[i])); var d = 0f;
+        for (var j = 0; j < u.Length; j++) { var e = u[j] - k[j]; d += e * e; }
+        if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+}
+static string Bar(float v, float scale) => new('#', Math.Clamp((int)(v * scale), 0, 20));
+
+while (running)
+{
+    if (Console.KeyAvailable)
+    {
+        var key = Console.ReadKey(true).Key;
+        float[] a, v;
+        lock (gate) { a = (float[])earSummary.Clone(); v = (float[])eyeSummary.Clone(); }
+
+        switch (key)
+        {
+            case ConsoleKey.Q or ConsoleKey.Escape:
+                running = false;
+                break;
+            case ConsoleKey.Spacebar:
+                bindings.Add((a, v));
+                status = $"bound pair #{bindings.Count - 1}  (total {bindings.Count})";
+                break;
+            case ConsoleKey.A when bindings.Count > 0:
+                status = $"HEARD -> matches pair #{Nearest(a, b => b.Audio)}  (its sight is what goes with this sound)";
+                break;
+            case ConsoleKey.V when bindings.Count > 0:
+                status = $"SAW -> matches pair #{Nearest(v, b => b.Visual)}  (its sound is what goes with this sight)";
+                break;
+            case ConsoleKey.A or ConsoleKey.V:
+                status = "nothing bound yet — press SPACE to teach a pair first";
+                break;
+        }
+        if (running) Console.WriteLine($"\n  >> {status}");
+    }
+
+    float ear, eye; bool ready;
+    lock (gate) { ear = earSurprise; eye = eyeSurprise; ready = eyeOk; }
+    var eyeCol = ready ? $"{eye,7:F3} {Bar(eye, 300f),-20}" : "(no camera)        ";
+    Console.Write($"\r  EAR {ear,7:F3} {Bar(ear, 40f),-20}   EYE {eyeCol}   bound:{bindings.Count} ");
     Thread.Sleep(50);
 }
 
-running = false;
-Console.ReadKey(true);
 mic?.StopRecording();
 mic?.Dispose();
 Console.WriteLine("\n\n  stopped.\n");
