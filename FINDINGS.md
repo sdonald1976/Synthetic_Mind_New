@@ -4,6 +4,30 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 023 — Live: it listens and watches the real world at the same time
+*2026-07-17 · Live · `SyntheticMind.Perceive` · verified on hardware by the user*
+
+`SyntheticMind.Perceive` runs both senses at once on real hardware — microphone → cochlea → level 0, and webcam → retina → level 0, each on its own thread at its own rate, both showing live surprise.
+
+**Result (user-verified):** the camera opened, the mic worked, and both meters jumped in response — the EAR to talking, the EYE to movement. The same architecture that began as a bouncing dot now perceives real sound and real sight, simultaneously, from the room.
+
+This one can't be a unit test — it needs a mic and a camera — so it's a qualitative result confirmed by running it, not a measured number. That's the honest status: the live dual-sense loop works. Camera device 0 was correct, the default bar scales were legible, no fixes were needed on the first run.
+
+### What this is
+
+The perception half of the "companion that watches and listens to the room" — real, live, running. Everything upstream (learning, segmentation, grounding, cross-modal binding) was demonstrated on files and synthetic streams; this confirms the front ends and the simultaneous loop hold up on actual hardware.
+
+### What it is not
+
+Perception, not yet cognition-in-the-room. It *reacts* (surprise) to live sound and sight; it does not yet *bind* what it hears to what it sees in real time, and the coarse 8×8 retina can't tell real objects apart. Those are the next steps, now on a foundation that provably runs live.
+
+### Next
+
+- **Live cross-modal binding:** bind co-occurring live audio and video (the finding 021/022 mechanism, in real time) — make a sound while showing something, and let it associate them. Limited by the coarse retina, but the first live grounding.
+- **A sharper retina** so the eye can actually distinguish real things, not just motion and gross brightness.
+
+---
+
 ## 022 — Cross-modal binding survives the mess, and it fails in exactly one place
 *2026-07-16 · Cross-modal · `SyntheticMind.Mind.CrossSituationalBinder`, `CrossSituationalTests`*
 
