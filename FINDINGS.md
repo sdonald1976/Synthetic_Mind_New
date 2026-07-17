@@ -4,6 +4,37 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 024 — Live cross-modal grounding: teach by co-occurrence, recall across senses
+*2026-07-17 · Live · `SyntheticMind.Perceive` · verified on hardware by the user*
+
+`SyntheticMind.Perceive` gained interactive binding: make a distinct sound while doing a distinct gesture, press SPACE, and it binds the co-occurring (heard, seen) pair. Then either sense recalls the pair — A takes the current sound and finds the matching pair, V takes the current gesture.
+
+**Result (user-verified, live):** taught two pairs — "ahhh" + wave-left → pair #0, "ooo" + wave-right → pair #1 — then tested recall repeatedly. It was **consistent**: left gesture always recalled #0, right always #1, and the sounds likewise. The eye meter visibly responded to movement, so the visual side had real signal to bind, not a blank. Cross-modal grounding, on real hardware, in real time.
+
+This is the whole arc, live: perception through two senses (023), and now binding one to the other from co-occurrence alone — the finding 021/022 mechanism, running on a mic and a webcam with a person teaching it by example. Not a unit test (needs hardware); a qualitative result confirmed by use.
+
+### A real bug fixed on the way
+
+SPACE wasn't registering at first (`bound:` stuck at 0). It was the console input: polling `KeyAvailable` inside the fast redraw loop didn't deliver keys in this terminal. A dedicated blocking `Console.ReadKey` thread fixed it, plus per-key feedback so input is always visible. (And a reminder logged: this repo is developed on the same machine that runs it — no fetch/pull needed between edit and run.)
+
+### The honest ceiling — unchanged, and now felt directly
+
+- **Two pairs, grossly distinct.** Reliable because "wave left" vs "wave right" and "ahhh" vs "ooo" are unmistakable to a coarse 8×8 retina and a 20-band ear. More pairs, or subtler distinctions, will degrade — the retina genuinely can't tell fine things apart.
+- **It bound representations, not concepts** (as in 020/021). It knows *this gesture* goes with *that sound*. It has no notion of what either *is*.
+- The gesture had to be *happening* at the moment of binding (the perception summary fades in ~0.3 s) — grounding is tied to real-time co-occurrence, which is honest but finicky.
+
+### Where the project stands
+
+From "an AI that can do anything" (message one) to: a modality-agnostic predictive learner that learns real sound and real video on the fly, discovers the units of speech unsupervised, grounds perception to names, and — live, on a webcam and mic — binds what it hears to what it sees by example. Every claim measured or demonstrated, every limit named. The remaining frontier is exactly the mess it was spared: a sharper eye, many concepts, real ambiguity, and the scale of grounded experience a mind actually needs.
+
+### Next (open, no wrong answer)
+
+- **A sharper eye** — edge/orientation features and finer resolution, so it can bind real objects, not just gross gestures.
+- **Persistence** — save/load the learned bindings and prototypes so a session's learning survives a restart.
+- **More pairs, live** — push the live binding until it breaks, and see where.
+
+---
+
 ## 023 — Live: it listens and watches the real world at the same time
 *2026-07-17 · Live · `SyntheticMind.Perceive` · verified on hardware by the user*
 
