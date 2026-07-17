@@ -1,4 +1,5 @@
 using System.Numerics.Tensors;
+using System.Text.Json;
 
 namespace SyntheticMind.Mind;
 
@@ -67,6 +68,30 @@ public sealed class ConceptStore
     }
 
     public bool Forget(string name) => _prototypes.Remove(name) & _counts.Remove(name);
+
+    // --- persistence: learned names survive a restart ----------------------------------------
+
+    private sealed record Snapshot(Dictionary<string, float[]> Prototypes, Dictionary<string, int> Counts);
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+
+    public void Save(string path)
+    {
+        var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        File.WriteAllText(path, JsonSerializer.Serialize(new Snapshot(_prototypes, _counts), JsonOptions));
+    }
+
+    public static ConceptStore Load(string path)
+    {
+        var snap = JsonSerializer.Deserialize<Snapshot>(File.ReadAllText(path))
+                   ?? throw new InvalidDataException($"Could not read concepts from '{path}'.");
+        var store = new ConceptStore();
+        foreach (var (name, proto) in snap.Prototypes) store._prototypes[name] = proto;
+        foreach (var (name, count) in snap.Counts) store._counts[name] = count;
+        return store;
+    }
+
+    public static ConceptStore LoadOrNew(string path) => File.Exists(path) ? Load(path) : new ConceptStore();
 
     private static float[] Normalized(float[] v)
     {

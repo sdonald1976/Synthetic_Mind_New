@@ -4,6 +4,34 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 026 — Persistence: what it learns survives a restart
+*2026-07-17 · Memory · `ConceptStore`, `CrossModalStore`, `SyntheticMind.Perceive`*
+
+Until now every concept was forgotten on exit — teach it "ahhh + wave-left", quit, and it's gone. Both grounding stores now save and load (JSON), and the live perceiver uses it: it loads its memory on start and saves on quit.
+
+**Verified:** round-trip tests for both stores — teach, save to disk, load into a fresh store, and recall still works (the sound still recalls the right concept, the shape still recognizes). `LoadOrNew` starts empty when there's no file. The live perceiver prints "remembered N concepts from last time" on launch and "saved N concepts" on quit.
+
+### What this changes
+
+The mind now has a **lifetime**, not just a session. Teach it something today, and tomorrow it still knows it — the first step from "a demo you re-run" toward "a thing that accumulates." Combined with the one-shot, no-forgetting binding, that means learning genuinely persists: each session adds to what came before instead of starting from zero.
+
+### Honest limits
+
+- **It persists the bindings, not the predictive hierarchy.** The `ConceptStore`/`CrossModalStore` prototypes are saved; the level-0 encoders (which re-adapt quickly anyway) are not. So the *grounded concepts* survive, but the perceptual front-end relearns its fast statistics each run. For grounding that's the part that matters; for a fuller "resume exactly where I was", the encoders would need saving too.
+- JSON is bloated for float arrays but readable — you can open the file and see what it knows. Right choice for a project about understanding, at this scale.
+
+### Where the project stands
+
+The core loop is now complete end to end and durable: perceive (two senses, live) → learn on the fly → discover units → ground to concepts, cross-modally, by example → **remember across restarts**. What began as "an AI that can do anything" is a small, honest, working mind that learns from its senses and keeps what it learns. The frontier remains scale and the mess of the real world — but the machine underneath is whole.
+
+### Next (open)
+
+- **Save the encoders too**, for exact-resume.
+- **Push the sharper eye live** — teach real objects and find where it holds and where it blurs.
+- **Scale** — many concepts, longer sessions, and the accumulation that persistence now makes possible.
+
+---
+
 ## 025 — A sharper eye: oriented edges, the V1 the retina was missing
 *2026-07-17 · Vision · `SyntheticMind.Vision.Retina`*
 

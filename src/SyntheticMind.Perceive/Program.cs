@@ -33,7 +33,11 @@ float earSurprise = 0, eyeSurprise = 0;
 var eyeOk = false;
 var earSummary = new float[MelBands];      // rolling average of recent mel frames (perception)
 var eyeSummary = new float[VisualWidth];   // rolling average of recent retina frames
-var bindings = new List<(float[] Audio, float[] Visual)>();
+
+// Learned bindings persist across runs: teach it something today, it remembers tomorrow.
+var memoryPath = Path.Combine(AppContext.BaseDirectory, "cross-modal-memory.json");
+var store = CrossModalStore.LoadOrNew(memoryPath);
+if (store.Count > 0) Console.WriteLine($"  (remembered {store.Count} concepts from last time)\n");
 
 // ---- EAR ------------------------------------------------------------------------------------
 var samples = new Queue<float>();
@@ -122,18 +126,6 @@ var eyeThread = new Thread(() =>
 eyeThread.Start();
 
 // ---- interaction + display ------------------------------------------------------------------
-float[] Unit(float[] v) { var n = TensorPrimitives.Norm<float>(v) + 1e-6f; var r = new float[v.Length]; TensorPrimitives.Divide<float>(v, n, r); return r; }
-int Nearest(float[] q, Func<(float[] Audio, float[] Visual), float[]> key)
-{
-    var u = Unit(q); var best = -1; var bd = float.MaxValue;
-    for (var i = 0; i < bindings.Count; i++)
-    {
-        var k = Unit(key(bindings[i])); var d = 0f;
-        for (var j = 0; j < u.Length; j++) { var e = u[j] - k[j]; d += e * e; }
-        if (d < bd) { bd = d; best = i; }
-    }
-    return best;
-}
 static string Bar(float v, float scale) => new('#', Math.Clamp((int)(v * scale), 0, 20));
 var consoleGate = new object();
 
@@ -150,18 +142,19 @@ var inputThread = new Thread(() =>
         float[] a, v;
         lock (gate) { a = (float[])earSummary.Clone(); v = (float[])eyeSummary.Clone(); }
 
+        // Bind consolidates: teaching the same thing again reinforces one concept, not a new one.
+        if (info.Key == ConsoleKey.Spacebar) store.Bind(a, v);
+        if (info.Key is ConsoleKey.Q or ConsoleKey.Escape) running = false;
+
         string msg = info.Key switch
         {
-            ConsoleKey.Q or ConsoleKey.Escape => "quitting",
-            ConsoleKey.Spacebar => $"BOUND pair #{bindings.Count} (total {bindings.Count + 1})",
-            ConsoleKey.A when bindings.Count > 0 => $"HEARD -> matches pair #{Nearest(a, b => b.Audio)}",
-            ConsoleKey.V when bindings.Count > 0 => $"SAW   -> matches pair #{Nearest(v, b => b.Visual)}",
+            ConsoleKey.Q or ConsoleKey.Escape => "quitting (saving what you taught)",
+            ConsoleKey.Spacebar => $"BOUND — now {store.Count} concept(s)",
+            ConsoleKey.A when store.Count > 0 => $"HEARD -> matches concept #{store.NearestByAudio(a)}",
+            ConsoleKey.V when store.Count > 0 => $"SAW   -> matches concept #{store.NearestByVisual(v)}",
             ConsoleKey.A or ConsoleKey.V => "nothing bound yet — press SPACE first",
             _ => $"got key '{info.Key}'  (SPACE = bind, A/V = recall, Q = quit)",
         };
-        if (info.Key == ConsoleKey.Spacebar) bindings.Add((a, v));
-        if (info.Key is ConsoleKey.Q or ConsoleKey.Escape) running = false;
-
         lock (consoleGate) Console.WriteLine($"\n  >> {msg}");
     }
 }) { IsBackground = true };
@@ -172,10 +165,11 @@ while (running)
     float ear, eye; bool ready;
     lock (gate) { ear = earSurprise; eye = eyeSurprise; ready = eyeOk; }
     var eyeCol = ready ? $"{eye,7:F3} {Bar(eye, 300f),-20}" : "(no camera)        ";
-    lock (consoleGate) Console.Write($"\r  EAR {ear,7:F3} {Bar(ear, 40f),-20}   EYE {eyeCol}   bound:{bindings.Count} ");
+    lock (consoleGate) Console.Write($"\r  EAR {ear,7:F3} {Bar(ear, 40f),-20}   EYE {eyeCol}   concepts:{store.Count} ");
     Thread.Sleep(80);
 }
 
+store.Save(memoryPath);   // remember across restarts
 mic?.StopRecording();
 mic?.Dispose();
-Console.WriteLine("\n\n  stopped.\n");
+Console.WriteLine($"\n\n  stopped. saved {store.Count} concept(s) to {Path.GetFileName(memoryPath)}\n");

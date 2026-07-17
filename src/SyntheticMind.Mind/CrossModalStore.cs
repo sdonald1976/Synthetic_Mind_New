@@ -1,4 +1,5 @@
 using System.Numerics.Tensors;
+using System.Text.Json;
 
 namespace SyntheticMind.Mind;
 
@@ -65,16 +66,53 @@ public sealed class CrossModalStore
     /// <summary>See a sight, recall what it sounds like.</summary>
     public float[]? RecallAudio(float[] visual) => Nearest(visual, b => b.Visual)?.Audio;
 
+    /// <summary>Index of the binding whose sound is nearest — a stable id for display/recognition.</summary>
+    public int? NearestByAudio(float[] audio) => IndexOfNearest(audio, b => b.Audio);
+
+    /// <summary>Index of the binding whose sight is nearest.</summary>
+    public int? NearestByVisual(float[] visual) => IndexOfNearest(visual, b => b.Visual);
+
+    // --- persistence: learned bindings survive a restart -------------------------------------
+
+    private sealed record PersistedBinding(float[] Audio, float[] Visual, int Count);
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+
+    public void Save(string path)
+    {
+        var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        var dto = _bindings.Select(b => new PersistedBinding(b.Audio, b.Visual, b.Count)).ToList();
+        File.WriteAllText(path, JsonSerializer.Serialize(dto, JsonOptions));
+    }
+
+    public static CrossModalStore Load(string path, float vigilance = 0.35f)
+    {
+        var store = new CrossModalStore(vigilance);
+        var dto = JsonSerializer.Deserialize<List<PersistedBinding>>(File.ReadAllText(path))
+                  ?? throw new InvalidDataException($"Could not read bindings from '{path}'.");
+        foreach (var b in dto) store._bindings.Add(new Binding { Audio = b.Audio, Visual = b.Visual, Count = b.Count });
+        return store;
+    }
+
+    public static CrossModalStore LoadOrNew(string path, float vigilance = 0.35f)
+        => File.Exists(path) ? Load(path, vigilance) : new CrossModalStore(vigilance);
+
     private Binding? Nearest(float[] query, Func<Binding, float[]> key)
+    {
+        var i = IndexOfNearest(query, key);
+        return i is null ? null : _bindings[i.Value];
+    }
+
+    private int? IndexOfNearest(float[] query, Func<Binding, float[]> key)
     {
         if (_bindings.Count == 0) return null;
         var q = Normalized(query);
-        Binding? best = null;
+        var best = -1;
         var bestDist = float.MaxValue;
-        foreach (var b in _bindings)
+        for (var i = 0; i < _bindings.Count; i++)
         {
-            var d = SquaredDistance(q, key(b));
-            if (d < bestDist) { bestDist = d; best = b; }
+            var d = SquaredDistance(q, key(_bindings[i]));
+            if (d < bestDist) { bestDist = d; best = i; }
         }
         return best;
     }
