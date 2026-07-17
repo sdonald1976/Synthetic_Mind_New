@@ -20,8 +20,8 @@ using SyntheticMind.Vision;
 // Coarse 8x8 retina: works on GROSS visual differences (wave left vs right, lean in, cover lens),
 // not fine objects. Pair each with a distinct sound ("ahh" vs "ooo", clap, whistle).
 
-const int SampleRate = 16000, Hop = 160, MelBands = 20, Grid = 8, CamW = 80, CamH = 60;
-var VisualWidth = Grid * Grid * 2;
+const int SampleRate = 16000, Hop = 160, MelBands = 20, Grid = 10, Orientations = 4, CamW = 80, CamH = 60;
+var VisualWidth = Grid * Grid * (2 + Orientations);   // brightness + motion + oriented edges
 
 Console.WriteLine();
 Console.WriteLine("  SyntheticMind — live cross-modal grounding");
@@ -93,7 +93,7 @@ var eyeThread = new Thread(() =>
     if (cam is null || !cam.IsOpened()) { Console.WriteLine("  (no webcam on device 0 - ear only)"); return; }
     lock (gate) eyeOk = true;
 
-    var retina = new Retina(Grid, motion: true);
+    var retina = new Retina(Grid, motion: true, orientations: Orientations);
     var level0 = new Unit(new LearnedPredictiveRule(VisualWidth, stateWidth: 12, history: 6, quadraticFeatures: 0));
     using var frame = new Mat();
     using var grayMat = new Mat();

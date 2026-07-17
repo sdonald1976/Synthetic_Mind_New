@@ -47,4 +47,44 @@ public class RetinaTests
         var f = retina.Process(frame, 16, 16);   // identical frame
         Assert.All(f.AsSpan(16).ToArray(), m => Assert.True(m < 1e-6f, "no change → no motion"));
     }
+
+    [Fact]
+    public void Oriented_edges_distinguish_a_vertical_from_a_horizontal_edge()
+    {
+        const int w = 32, h = 32, orient = 4;
+        var retina = new Retina(grid: 4, motion: false, orientations: orient);
+
+        // Vertical edge: left half dark, right half bright -> gradient is horizontal -> first bin.
+        var vertical = new float[w * h];
+        for (var y = 0; y < h; y++) for (var x = w / 2; x < w; x++) vertical[y * w + x] = 1f;
+        var vf = retina.Process(vertical, w, h);
+
+        // Horizontal edge: top half dark, bottom half bright -> gradient vertical -> middle bin.
+        var retina2 = new Retina(grid: 4, motion: false, orientations: orient);
+        var horizontal = new float[w * h];
+        for (var y = h / 2; y < h; y++) for (var x = 0; x < w; x++) horizontal[y * w + x] = 1f;
+        var hf = retina2.Process(horizontal, w, h);
+
+        // Edge bins start after the 16 brightness cells (no motion). Sum each orientation across cells.
+        float[] EnergyPerOrientation(float[] f)
+        {
+            var e = new float[orient];
+            for (var cell = 0; cell < 16; cell++)
+                for (var o = 0; o < orient; o++) e[o] += f[16 + cell * orient + o];
+            return e;
+        }
+        var ve = EnergyPerOrientation(vf);
+        var he = EnergyPerOrientation(hf);
+
+        // Vertical edge -> bin 0 (horizontal gradient) dominates; horizontal edge -> bin 2.
+        Assert.True(ve[0] > ve[2], $"vertical edge should light bin 0, got {ve[0]:F2} vs {ve[2]:F2}");
+        Assert.True(he[2] > he[0], $"horizontal edge should light bin 2, got {he[2]:F2} vs {he[0]:F2}");
+    }
+
+    [Fact]
+    public void Edges_widen_the_feature_vector()
+    {
+        Assert.Equal(4 * 4 * (1 + 1 + 4), new Retina(grid: 4, motion: true, orientations: 4).Width);
+        Assert.Equal(4 * 4, new Retina(grid: 4, motion: false, orientations: 0).Width);
+    }
 }

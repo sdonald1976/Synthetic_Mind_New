@@ -4,6 +4,25 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 025 — A sharper eye: oriented edges, the V1 the retina was missing
+*2026-07-17 · Vision · `SyntheticMind.Vision.Retina`*
+
+The coarse 8×8 brightness+motion retina could feel *that* something moved, not *what* it was — finding 024's live grounding only worked on gross gestures. This gives the eye what a real V1 has: **oriented edge detectors**. Per grid cell, a small histogram of gradient orientations (HOG-style) — where the edges are and which way they run — on top of brightness and motion. Edges carry *shape*, which is what tells objects apart when brightness can't.
+
+**Verified (feature level):** a vertical edge lights the horizontal-gradient bin, a horizontal edge lights the middle bin, and the feature vector widens as configured. The live perceiver now runs a 10×10 grid with 4 orientation bins — 600 features (brightness + motion + 4 edges per cell), up from 128.
+
+### Honest status
+
+- **The eye is genuinely richer, but "sharper" is relative.** 600 hand-built features over a 10×10 grid is a real step up from a blurry 8×8, and edges add shape it never had. It is still nowhere near what a deep vision model extracts — it will help tell distinct *shapes* apart (a mug outline vs. a book), not recognize a specific face or read text.
+- **Whether it improves live grounding is pending a hardware test.** The feature is correct and wired in; the payoff — binding more, and subtler, real things — is yours to try. The old grounding tests still pass unchanged (they used motion-only on distinct synthetic shapes, which never needed edges).
+- The bigger feature vector is cheap: NLMS (finding 013) already makes the encoder scale/dimension-agnostic, so no re-tuning was needed — the same code just eats a wider input.
+
+### Next
+
+Persistence — save and reload the learned bindings and prototypes, so a session's grounding survives a restart (right now every concept is forgotten on exit).
+
+---
+
 ## 024 — Live cross-modal grounding: teach by co-occurrence, recall across senses
 *2026-07-17 · Live · `SyntheticMind.Perceive` · verified on hardware by the user*
 
