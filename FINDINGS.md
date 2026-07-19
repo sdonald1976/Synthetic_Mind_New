@@ -4,6 +4,43 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 027 — The top-down loop: a pipeline becomes a mind
+*2026-07-17 · Predictive hierarchy · `SyntheticMind.Mind` (Rules, Hierarchy), `TopDownTests`*
+
+Every finding until now flowed one way: senses up to concepts. [ARCHITECTURE.md §5](ARCHITECTURE.md) warned that this makes it *a pipeline, not a mind* — a real cognition needs the reverse edge too, higher levels shaping what lower levels do. The `Unit` always had a dormant `context` port for exactly this (plumbed by `Hierarchy`, ignored by every rule). This activates it: `LinearDeltaRule` now learns from the context handed down, so a higher level can steer the lower level's prediction.
+
+**The task** is a long-range dependency the fast level *structurally cannot* solve: each block is `[cue, 0,0,0,0,0,0,0, cue]` — the final value echoes a cue from 9 steps back, past level 0's 4-frame window.
+
+```
+  error at the target (needs the cue from 9 steps back), lower = better:
+    no context (fast level blind to the cue)   0.917   baseline
+    + oracle cue (top-down truth)              0.750   18% lower — can the fact help?
+    + real level-1 state (the loop)            0.618   33% lower — does the real loop help?
+```
+
+### The result
+
+**Top-down feedback cut the error 33% on something the fast level cannot predict alone.** Level 1 held the cue in its longer memory; the `Hierarchy` fed its state down as level 0's context; level 0 learned to use it and predicted across the gap. Information flowed *down*, and it mattered.
+
+Notably the real loop beat the bare-cue oracle (33% vs 18%): level 1's state carries *when* as well as *what* — where in the block we are, not just the cue value — so level 0 knows both the cue and where to apply it. A learned top-down signal can be richer than the single fact you'd think to hand down.
+
+### Why this one matters more than its size
+
+This is the edge the whole design was missing. Until now the system perceived, learned, and grounded — all bottom-up. A mind also *predicts top-down*: what you expect shapes what you perceive; a concept primes its parts; memory reaches down into the senses. This is the smallest honest instance of that — a higher level's memory improving a lower level's prediction — but it's the difference in kind between a feed-forward pipeline and something that loops. The port existed since the first design; now it carries signal.
+
+### Honest limits
+
+- **One direction of benefit, one simple task.** It shows top-down *prediction* helps on a long-range dependency. It is not yet attention (context *gating* perception), nor pattern completion in the live senses — those are the same edge pushed further.
+- **Only `LinearDeltaRule` uses context so far.** The learned units still ignore it; wiring it into them (and into the live audio/video hierarchy) is the next step.
+- The effect is real but modest (33%) on a toy; whether top-down scales to sharpen real perception is untested.
+
+### Next
+
+- **Context in the learned units**, and in the live perceiver — does knowing "what I'm hearing" sharpen "what I'm seeing", and vice versa?
+- **Attention:** let context *gate* which inputs a level attends to, not just bias its prediction.
+
+---
+
 ## 026 — Persistence: what it learns survives a restart
 *2026-07-17 · Memory · `ConceptStore`, `CrossModalStore`, `SyntheticMind.Perceive`*
 

@@ -22,6 +22,13 @@ public sealed class LinearDeltaRule : IUnitRule
     private readonly float[][] _weights;  // [inputWidth][stateWidth + 1], last column is bias
     private readonly float _learningRate;
 
+    // Top-down pathway (ARCHITECTURE.md §5 / finding 027): a learned map from the context handed
+    // DOWN by the level above to this level's input prediction. Lazily sized on the first context
+    // seen, so a level with nothing above it behaves exactly as before. When the context carries
+    // information the fast state lacks (a slow latent the level above tracks), this lowers error.
+    private float[][]? _contextWeights;   // [inputWidth][contextWidth]
+    private float[]? _lastContext;        // the context the last prediction used, for Learn
+
     public LinearDeltaRule(int inputWidth, int historyLength = 3, float learningRate = 0.05f)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(inputWidth);
@@ -49,24 +56,40 @@ public sealed class LinearDeltaRule : IUnitRule
 
     public float[] Predict(float[]? context)
     {
+        if (context is not null && _contextWeights is null)
+        {
+            _contextWeights = new float[InputWidth][];
+            for (var i = 0; i < InputWidth; i++) _contextWeights[i] = new float[context.Length];
+        }
+        _lastContext = context;
+
         var prediction = new float[InputWidth];
         for (var i = 0; i < InputWidth; i++)
+        {
             prediction[i] = TensorPrimitives.Dot<float>(_state, _weights[i].AsSpan(0, StateWidth))
                             + _weights[i][StateWidth];
+            if (context is not null) prediction[i] += TensorPrimitives.Dot<float>(_contextWeights![i], context);
+        }
         return prediction;
     }
 
     public void Learn(float[] error)
     {
-        // Learn is called BEFORE Observe on each tick, so _state is still the state that
-        // produced the prediction this error belongs to. That ordering is the whole
-        // correctness argument for this method — see Unit.Observe.
+        // Learn is called BEFORE Observe on each tick, so _state is still the state that produced
+        // the prediction this error belongs to — and _lastContext is the context it used. That
+        // ordering is the whole correctness argument — see Unit.Observe.
         for (var i = 0; i < InputWidth; i++)
         {
             var scale = _learningRate * error[i];
             var row = _weights[i];
             for (var j = 0; j < StateWidth; j++) row[j] += scale * _state[j];
             row[StateWidth] += scale;
+
+            if (_lastContext is not null && _contextWeights is not null)
+            {
+                var ctxRow = _contextWeights[i];
+                for (var j = 0; j < ctxRow.Length; j++) ctxRow[j] += scale * _lastContext[j];
+            }
         }
     }
 }
