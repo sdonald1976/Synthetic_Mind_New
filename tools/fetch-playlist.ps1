@@ -19,16 +19,41 @@ param(
     [int]$MaxHeight = 360
 )
 
+# Find a working yt-dlp WITHOUT trusting bare `python` — different terminals resolve `python` to
+# different installs (the Microsoft Store stub often lacks pip packages). Prefer the standalone
+# exe pip dropped in a Scripts folder; then py launcher; then python -m as a last resort.
+function Resolve-YtDlp {
+    $onPath = Get-Command yt-dlp -ErrorAction SilentlyContinue
+    if ($onPath) { return @($onPath.Source) }
+
+    $exe = Get-ChildItem -ErrorAction SilentlyContinue -Path @(
+        "$env:APPDATA\Python\Python*\Scripts\yt-dlp.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python*\Scripts\yt-dlp.exe",
+        "C:\Program Files\Python*\Scripts\yt-dlp.exe"
+    ) | Select-Object -First 1
+    if ($exe) { return @($exe.FullName) }
+
+    if (Get-Command py -ErrorAction SilentlyContinue) { return @("py", "-m", "yt_dlp") }
+    return @("python", "-m", "yt_dlp")
+}
+
+$yt = Resolve-YtDlp
+$invoker = $yt[0]
+$prefix = if ($yt.Length -gt 1) { $yt[1..($yt.Length - 1)] } else { @() }
+Write-Host "  using yt-dlp: $($yt -join ' ')"
+
 New-Item -ItemType Directory -Force $Out | Out-Null
 
-# yt-dlp was installed via pip, so invoke it through python. ffmpeg (on PATH) merges audio+video.
-python -m yt_dlp `
-    -f "bestvideo[height<=$MaxHeight]+bestaudio/best[height<=$MaxHeight]/best" `
-    --merge-output-format mp4 `
-    --no-overwrites `
-    --ignore-errors `
-    -o "$Out/%(playlist_index)03d-%(title).80s.%(ext)s" `
+$ytArgs = @(
+    "-f", "bestvideo[height<=$MaxHeight]+bestaudio/best[height<=$MaxHeight]/best",
+    "--merge-output-format", "mp4",
+    "--no-overwrites",
+    "--ignore-errors",
+    "-o", "$Out/%(playlist_index)03d-%(title).80s.%(ext)s",
     $Url
+)
+
+& $invoker @($prefix + $ytArgs)
 
 Write-Host ""
 Write-Host "  Done. Now let it watch them:"
