@@ -4,6 +4,45 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 029 — Bounded consolidation: from a 10k-concept pile to a handful of recurring units
+*2026-07-19 · Batch · `SyntheticMind.Watch` · explosion measured on a real 39-video corpus; fix built + tested*
+
+Finding 028 said "feed it a curated corpus and see." We did — 39 Ms Rachel toddler-learning videos (one presenter, one subject: the consistency finding 022 asks for). Two very different things happened, and both are the point.
+
+**The learning worked.** Audio surprise fell within and across clips and *stayed* fallen as new videos arrived — it was adapting to her voice and songs:
+```
+  001  65029 frames, 2169s | audio surprise 1.503 -> 0.903
+  002 143096 frames, 4774s | audio surprise 2.187 -> 0.736
+  003 108503 frames, 3620s | audio surprise 0.897 -> 0.723
+  004 110536 frames, 3688s | audio surprise 0.637 -> 0.657
+  005 108897 frames, 3633s | audio surprise 1.293 -> 0.679   (settling ~0.68)
+```
+
+**The concept count exploded.** +174, +492, +243, +168, +181 — **>1,200 "concepts" after 5 clips**, heading for ten thousand by video 39. Not a thousand things learned: the over-splitting failure live. Because every real-video moment is a little different, the novelty-gated store minted a *new* concept almost every event instead of consolidating. A giant undifferentiated pile, not a vocabulary.
+
+### The fix — two parts, both small
+
+- **Bounded codebook (`VectorQuantizer`).** The real consolidation. A codebook that can hold at most `capacity` prototypes (48 audio, 64 video). A novel event mints a new unit only while there's room; once full, it snaps to (and nudges) the nearest existing one. So the unit count has a **hard ceiling** — it *cannot* explode, no matter how many videos. Recurring things land on the same unit id again and again.
+- **Cross-situational PMI layer (`CrossSituationalBinder`, from finding 022, now wired in).** Over those unit ids it accumulates co-occurrence across the whole corpus and ranks pairings by pointwise mutual information — which divides out how common each unit is. Ms Rachel's face is on screen almost constantly, so naive counting pairs it with *every* sound; PMI discounts the ever-present and lets the specific, recurring sound↔sight pairings rise. A support floor (min joint count) keeps one-off coincidences off the chart.
+
+### Verified
+
+- Unit tests: the codebook provably never exceeds capacity (5,000 all-novel vectors → exactly 16 units at cap 16); recurring vectors keep the same id (>95%); survives save/load. PMI ranking surfaces the true recurring self-pairs and rejects both a constant distractor and a one-off coincidence. Full suite 56/56.
+- End-to-end on `bbb.mp4` (10 s): 4 events → **2 audio + 1 video unit** — bounded, no pile.
+
+### Honest limits
+
+- The **explosion is fixed; meaning is not proven.** A bounded, PMI-ranked set is the right *shape*, but whether the units correspond to things a human would name still depends on the coarse eye/ear (findings 019/024) — 64 video units over an 80×60 grayscale retina is still gross.
+- **`capacity` and the split thresholds are chosen, not derived.** Too small blurs distinct things together; too large lets noise back in. Sensible defaults, untuned on this corpus.
+- One dominant unit per sense per event (no within-episode ambiguity), so PMI here is doing the *frequency-discounting* job, not the harder *disambiguation* job it's built for. Still the right tool; just working easier data than the 022 tests.
+
+### Next
+
+- Re-run the 39-video corpus with the bounded pipeline and read the top PMI pairings — the actual test of whether curation + consolidation yields real concepts.
+- Tune `capacity`/thresholds on that output; consider top-N units per event to give PMI genuine disambiguation to do.
+
+---
+
 ## 028 — It watches video files, unattended: batch cross-modal learning
 *2026-07-17 · Batch · `SyntheticMind.Watch` · verified on a real MP4*
 

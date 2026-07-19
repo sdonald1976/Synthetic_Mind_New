@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace SyntheticMind.Mind;
 
 /// <summary>
@@ -20,6 +22,9 @@ public sealed class CrossSituationalBinder
     private readonly Dictionary<int, int> _heard = new();
     private readonly Dictionary<int, int> _seen = new();
     private int _episodes;
+
+    /// <summary>How many co-occurrence episodes have been observed.</summary>
+    public int Episodes => _episodes;
 
     /// <summary>One episode: the sound-units and sight-units present together, pairing unknown.</summary>
     public void Observe(IReadOnlyCollection<int> heardUnits, IReadOnlyCollection<int> seenUnits)
@@ -52,4 +57,55 @@ public sealed class CrossSituationalBinder
         }
         return best;
     }
+
+    /// <summary>
+    /// The strongest recurring sound↔sight pairings, ranked by PMI. A minimum joint count is required
+    /// so a pair that happened to co-occur once (infinite-looking PMI) can't top a pairing that
+    /// genuinely recurs across the playlist — support first, then strength.
+    /// </summary>
+    public IReadOnlyList<(int Heard, int Seen, double Pmi, int JointCount)> TopPairings(int k, int minJointCount = 3)
+    {
+        if (_episodes == 0) return [];
+        var list = new List<(int Heard, int Seen, double Pmi, int JointCount)>();
+        foreach (var ((heard, seen), joint) in _joint)
+        {
+            if (joint < minJointCount) continue;
+            var pmi = Math.Log(((double)joint / _episodes) / (((double)_heard[heard] / _episodes) * ((double)_seen[seen] / _episodes)));
+            list.Add((heard, seen, pmi, joint));
+        }
+        return list.OrderByDescending(t => t.Pmi).ThenByDescending(t => t.JointCount).Take(k).ToList();
+    }
+
+    // --- persistence: co-occurrence statistics survive a restart --------------------------------
+
+    private sealed record CountEntry(int Unit, int Count);
+    private sealed record JointEntry(int Heard, int Seen, int Count);
+    private sealed record Persisted(int Episodes, List<JointEntry> Joint, List<CountEntry> Heard, List<CountEntry> Seen);
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+
+    public void Save(string path)
+    {
+        var dir = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+        var dto = new Persisted(
+            _episodes,
+            _joint.Select(kv => new JointEntry(kv.Key.Heard, kv.Key.Seen, kv.Value)).ToList(),
+            _heard.Select(kv => new CountEntry(kv.Key, kv.Value)).ToList(),
+            _seen.Select(kv => new CountEntry(kv.Key, kv.Value)).ToList());
+        File.WriteAllText(path, JsonSerializer.Serialize(dto, JsonOptions));
+    }
+
+    public static CrossSituationalBinder Load(string path)
+    {
+        var dto = JsonSerializer.Deserialize<Persisted>(File.ReadAllText(path))
+                  ?? throw new InvalidDataException($"Could not read co-occurrence statistics from '{path}'.");
+        var b = new CrossSituationalBinder { _episodes = dto.Episodes };
+        foreach (var e in dto.Joint) b._joint[(e.Heard, e.Seen)] = e.Count;
+        foreach (var e in dto.Heard) b._heard[e.Unit] = e.Count;
+        foreach (var e in dto.Seen) b._seen[e.Unit] = e.Count;
+        return b;
+    }
+
+    public static CrossSituationalBinder LoadOrNew(string path)
+        => File.Exists(path) ? Load(path) : new CrossSituationalBinder();
 }

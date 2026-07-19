@@ -76,4 +76,30 @@ public class CrossSituationalTests
         var glued0 = binder.ReferentOf(0);
         Assert.True(glued0 is 0 or 1, "a glued pair collapses to an unresolvable set — the known limit");
     }
+
+    [Fact]
+    public void TopPairings_surfaces_recurring_true_pairs_and_ignores_a_constant_distractor()
+    {
+        // The watcher's real problem: one sight (say #99, "the presenter's face") is on screen almost
+        // always, so naive counting pairs it with every sound. PMI must discount it and instead rank
+        // the specific pairings that recur. A one-off coincidence must not top the chart either.
+        var rng = new Random(2);
+        var binder = new CrossSituationalBinder();
+        for (var e = 0; e < 600; e++)
+        {
+            var o = rng.Next(Objects);
+            var heard = new List<int> { o };
+            var seen = new List<int> { o, 99 };   // the true sight, PLUS the ever-present face #99
+            if (e == 0) { heard.Add(42); seen.Add(43); } // a single freak coincidence
+            binder.Observe(heard, seen);
+        }
+
+        var top = binder.TopPairings(Objects, minJointCount: 5);
+
+        // Every strong pairing is a true self-pair (o -> o), never the constant distractor #99...
+        Assert.All(top, t => Assert.Equal(t.Heard, t.Seen));
+        Assert.DoesNotContain(top, t => t.Seen == 99);
+        // ...and the one-off (42,43) is filtered out by the support floor.
+        Assert.DoesNotContain(top, t => t.Heard == 42);
+    }
 }

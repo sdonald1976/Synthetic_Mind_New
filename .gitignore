@@ -5,3 +5,6 @@ obj/
 
 # Downloaded videos (yt-dlp) — copyrighted third-party content, local research use only, never committed.
 youtube/
+
+# Per-developer launch profiles (machine-specific paths)
+launchSettings.json

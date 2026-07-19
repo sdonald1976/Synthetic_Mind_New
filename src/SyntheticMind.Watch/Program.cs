@@ -26,9 +26,20 @@ var videos = Directory.Exists(folder)
 Console.WriteLine($"\n  SyntheticMind — watching {videos.Length} video(s) in {folder}\n");
 if (videos.Length == 0) { Console.WriteLine("  no videos found. pass a folder: dotnet run -- <folder>\n"); return; }
 
-var memoryPath = Path.Combine(AppContext.BaseDirectory, "watch-memory.json");
-var store = CrossModalStore.LoadOrNew(memoryPath);
-if (store.Count > 0) Console.WriteLine($"  (starting from {store.Count} concept(s) learned earlier)\n");
+// Consolidation + cross-situational binding (finding 029). Bounded codebooks fold the messy real
+// events into a SMALL set of recurring units instead of minting a fresh "concept" every time (the
+// ~10k-concept explosion we watched on 39 videos). A PMI layer over those unit ids then finds the
+// sound↔sight pairings that recur across the whole playlist and discounts the ever-present ones
+// (Ms Rachel's face is on screen almost constantly, so naive binding pairs it with every sound).
+var audioCodebookPath = Path.Combine(AppContext.BaseDirectory, "watch-audio-codebook.json");
+var videoCodebookPath = Path.Combine(AppContext.BaseDirectory, "watch-video-codebook.json");
+var pairingsPath = Path.Combine(AppContext.BaseDirectory, "watch-pairings.json");
+
+var audioVq = VectorQuantizer.LoadOrNew(audioCodebookPath, capacity: 48, newUnitThreshold: 0.20f);
+var videoVq = VectorQuantizer.LoadOrNew(videoCodebookPath, capacity: 64, newUnitThreshold: 0.30f);
+var binder = CrossSituationalBinder.LoadOrNew(pairingsPath);
+if (binder.Episodes > 0)
+    Console.WriteLine($"  (resuming: {audioVq.Count} audio + {videoVq.Count} video units, {binder.Episodes} co-occurrences seen earlier)\n");
 
 // Shared pipelines — they keep learning across the whole folder, not per file.
 var cochlea = new Cochlea(SampleRate, 512, MelBands);
@@ -62,7 +73,6 @@ foreach (var video in videos)
     int frames = 0, hopsDone = 0, bindsThisVideo = 0;
     float earlyAudio = 0, lateAudio = 0; int earlyN = 0, lateN = 0;
     var lastBindMs = -1000.0;
-    var conceptsAtStart = store.Count;
 
     while (cap.Read(frame) && !frame.Empty())
     {
@@ -93,24 +103,40 @@ foreach (var video in videos)
         for (var i = 0; i < visualWidth; i++) videoSummary[i] += 0.1f * (feat[i] - videoSummary[i]);
         var videoEvent = vs > 2f * videoBaseline;
 
-        // Auto-bind a co-occurring event (both senses spiking), with a cooldown so a busy stretch
-        // doesn't flood the store. Consolidation + cross-situational statistics sort real from noise.
+        // A co-occurring event (both senses spiking), with a cooldown so a busy stretch doesn't
+        // flood it. Quantize each sense to its nearest bounded-codebook unit, then feed the unit
+        // pair to the cross-situational binder — consolidation + PMI statistics sort real from noise.
         if (audioEvent && videoEvent && tMs - lastBindMs > 400)
         {
-            store.Bind(audioSummary, videoSummary);
+            var au = audioVq.Quantize(audioSummary);
+            var vu = videoVq.Quantize(videoSummary);
+            binder.Observe([au], [vu]);
             lastBindMs = tMs;
             bindsThisVideo++;
         }
         frames++;
     }
 
-    store.Save(memoryPath);
+    audioVq.Save(audioCodebookPath);
+    videoVq.Save(videoCodebookPath);
+    binder.Save(pairingsPath);
     var learned = lateN > 0 && earlyN > 0 ? $"surprise {earlyAudio / earlyN:F3} -> {lateAudio / Math.Max(1, lateN):F3}" : "n/a";
-    var newConcepts = store.Count - conceptsAtStart;
-    Console.WriteLine($"  {name,-28} {frames,4} frames, {samples.Length / SampleRate}s audio | bound {bindsThisVideo} events, +{newConcepts} concepts (audio {learned})");
+    Console.WriteLine($"  {name,-28} {frames,4} frames, {samples.Length / SampleRate}s audio | {bindsThisVideo} events -> {audioVq.Count} audio / {videoVq.Count} video units (audio {learned})");
 }
 
-Console.WriteLine($"\n  done. {store.Count} concept(s) total, saved to {Path.GetFileName(memoryPath)}\n");
+Console.WriteLine($"\n  done. consolidated {binder.Episodes} co-occurrences into {audioVq.Count} audio + {videoVq.Count} video units (bounded — no more 10k-concept pile).");
+var top = binder.TopPairings(10, minJointCount: 3);
+if (top.Count > 0)
+{
+    Console.WriteLine("  strongest recurring sound<->sight pairings (cross-situational PMI):");
+    foreach (var (h, s, pmi, joint) in top)
+        Console.WriteLine($"    audio #{h,-2} <-> video #{s,-2}   pmi {pmi,5:F2}, seen together {joint}x");
+}
+else
+{
+    Console.WriteLine("  no pairing recurred often enough to report yet (need more footage).");
+}
+Console.WriteLine();
 
 // --- pull the audio track out of a video with ffmpeg (mono, 16 kHz) --------------------------
 static float[] ExtractAudio(string video, int rate)
