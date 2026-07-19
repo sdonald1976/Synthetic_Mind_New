@@ -2,3 +2,6 @@ bin/
 obj/
 .vs/
 *.user
+
+# Downloaded videos (yt-dlp) — copyrighted third-party content, local research use only, never committed.
+youtube/
