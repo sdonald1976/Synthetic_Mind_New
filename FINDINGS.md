@@ -4,6 +4,39 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 028 — It watches video files, unattended: batch cross-modal learning
+*2026-07-17 · Batch · `SyntheticMind.Watch` · verified on a real MP4*
+
+The automation ask: point it at a folder of videos and let it watch *and* listen on its own, no human pressing SPACE. Built `SyntheticMind.Watch` — OpenCvSharp reads the video frames in-process, ffmpeg (already on PATH, shelled out) pulls the audio track to a temp WAV. The two run in sync; when both senses spike together it auto-binds the co-occurring pair into a **persistent** `CrossModalStore`, so learning accumulates across the whole pile and across sessions.
+
+**Verified on a real MP4** (Big Buck Bunny, 10 s, h264 + aac):
+```
+  bbb.mp4   250 frames, 10s audio | bound 4 events, +3 concepts (audio surprise 0.147 -> 0.123)
+  (second run) starting from 3 concepts -> bound 4 events, +0 new
+```
+The whole chain works: audio extracted, frames decoded, both pipelines synced, events auto-bound with no trigger, learning persisted. The second run *reinforced* the same concepts rather than duplicating them (+0 new) — re-watching consolidates, exactly right.
+
+### What this is
+
+The full unsupervised loop at file scale: perceive two senses from a video → learn on the fly → detect salient co-occurring events (adaptive surprise threshold + cooldown) → bind them cross-modally → remember. Feed it a folder, walk away, come back to what it formed. Every piece is one we already built and tested; this wires them into an unattended batch runner.
+
+### The honest limits — and they are the whole story here
+
+- **"3 concepts" from one random 10-second clip means almost nothing.** They're whatever happened to spike together in Big Buck Bunny. This finding verifies the *machinery*, not that it learned anything meaningful.
+- **Meaning needs consistency, and random video hasn't got it.** This is finding 022's conclusion made concrete: cross-situational binding recovers real pairings only when they *recur* across many episodes. A curated pile (many clips of the same thing) could firm up; a diverse grab-bag washes into statistical soup. What you feed it matters far more than how much.
+- **The event thresholds are guesses** (spike = 2× running baseline, 400 ms cooldown), untuned on real footage — the auto-binding will be noisy and want tuning per corpus.
+- Coarse eye and 20-band ear still can't tell fine things apart, so even with perfect co-occurrence the concepts are gross.
+
+So: a working, unattended, watch-and-listen learner that accumulates — and an honest reminder that scale without consistency is the frontier, not the solution.
+
+### Next
+
+- **Feed it a curated corpus** (many clips of one kind of thing) and see whether a real, recurring concept firms up — the actual test of unsupervised learning at scale.
+- **A cross-situational layer over the auto-binds** (finding 022's PMI) to sort real pairings from coincidences, instead of trusting every co-event.
+- Tune the event detector on real footage.
+
+---
+
 ## 027 — The top-down loop: a pipeline becomes a mind
 *2026-07-17 · Predictive hierarchy · `SyntheticMind.Mind` (Rules, Hierarchy), `TopDownTests`*
 
