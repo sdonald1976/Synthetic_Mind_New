@@ -23,18 +23,20 @@ param(
 # different installs (the Microsoft Store stub often lacks pip packages). Prefer the standalone
 # exe pip dropped in a Scripts folder; then py launcher; then python -m as a last resort.
 function Resolve-YtDlp {
+    # NOTE: the leading `,` keeps PowerShell from unwrapping a single-element array into a bare
+    # string (which would make $yt[0] index into the string and return just 'C').
     $onPath = Get-Command yt-dlp -ErrorAction SilentlyContinue
-    if ($onPath) { return @($onPath.Source) }
+    if ($onPath) { return ,@($onPath.Source) }
 
     $exe = Get-ChildItem -ErrorAction SilentlyContinue -Path @(
         "$env:APPDATA\Python\Python*\Scripts\yt-dlp.exe",
         "$env:LOCALAPPDATA\Programs\Python\Python*\Scripts\yt-dlp.exe",
         "C:\Program Files\Python*\Scripts\yt-dlp.exe"
     ) | Select-Object -First 1
-    if ($exe) { return @($exe.FullName) }
+    if ($exe) { return ,@($exe.FullName) }
 
-    if (Get-Command py -ErrorAction SilentlyContinue) { return @("py", "-m", "yt_dlp") }
-    return @("python", "-m", "yt_dlp")
+    if (Get-Command py -ErrorAction SilentlyContinue) { return ,@("py", "-m", "yt_dlp") }
+    return ,@("python", "-m", "yt_dlp")
 }
 
 $yt = Resolve-YtDlp
