@@ -44,11 +44,16 @@ $invoker = $yt[0]
 $prefix = if ($yt.Length -gt 1) { $yt[1..($yt.Length - 1)] } else { @() }
 Write-Host "  using yt-dlp: $($yt -join ' ')"
 
-# YouTube now requires solving a JavaScript challenge to extract formats; yt-dlp needs a JS runtime
-# for it, or every video comes back "not available". Use whichever is installed.
+# YouTube now requires solving a JavaScript challenge to extract formats; yt-dlp needs both a JS
+# runtime AND its challenge-solver script (a "remote component" it fetches once from its own GitHub,
+# github.com/yt-dlp/ejs). Without both, videos come back "not available" or missing formats.
 $jsArgs = @()
 foreach ($rt in @("node", "deno", "bun")) {
-    if (Get-Command $rt -ErrorAction SilentlyContinue) { $jsArgs = @("--js-runtimes", $rt); Write-Host "  JS runtime: $rt"; break }
+    if (Get-Command $rt -ErrorAction SilentlyContinue) {
+        $jsArgs = @("--js-runtimes", $rt, "--remote-components", "ejs:github")
+        Write-Host "  JS runtime: $rt (+ yt-dlp's EJS challenge solver from GitHub)"
+        break
+    }
 }
 if ($jsArgs.Count -eq 0) { Write-Warning "No JS runtime (node/deno/bun) on PATH - YouTube may refuse extraction. Install Node.js or Deno." }
 
