@@ -44,13 +44,22 @@ $invoker = $yt[0]
 $prefix = if ($yt.Length -gt 1) { $yt[1..($yt.Length - 1)] } else { @() }
 Write-Host "  using yt-dlp: $($yt -join ' ')"
 
+# YouTube now requires solving a JavaScript challenge to extract formats; yt-dlp needs a JS runtime
+# for it, or every video comes back "not available". Use whichever is installed.
+$jsArgs = @()
+foreach ($rt in @("node", "deno", "bun")) {
+    if (Get-Command $rt -ErrorAction SilentlyContinue) { $jsArgs = @("--js-runtimes", $rt); Write-Host "  JS runtime: $rt"; break }
+}
+if ($jsArgs.Count -eq 0) { Write-Warning "No JS runtime (node/deno/bun) on PATH - YouTube may refuse extraction. Install Node.js or Deno." }
+
 New-Item -ItemType Directory -Force $Out | Out-Null
 
 $ytArgs = @(
     "-f", "bestvideo[height<=$MaxHeight]+bestaudio/best[height<=$MaxHeight]/best",
     "--merge-output-format", "mp4",
     "--no-overwrites",
-    "--ignore-errors",
+    "--ignore-errors"
+) + $jsArgs + @(
     "-o", "$Out/%(playlist_index)03d-%(title).80s.%(ext)s",
     $Url
 )
