@@ -75,7 +75,12 @@ public sealed class VectorQuantizer
     }
 
     /// <summary>Map a vector to its nearest unit WITHOUT learning — read-only lookup. −1 if empty.</summary>
-    public int Classify(float[] v) => _prototypes.Count == 0 ? -1 : Nearest(Normalized(Center(v, update: false))).Index;
+    public int Classify(float[] v) => Match(v).Unit;
+
+    /// <summary>Nearest unit and its cosine distance, WITHOUT learning. Distance ranks how well a
+    /// vector exemplifies its unit — small = a textbook example (used by the exemplar dumper).</summary>
+    public (int Unit, float Distance) Match(float[] v)
+        => _prototypes.Count == 0 ? (-1, float.MaxValue) : Nearest(Normalized(Center(v, update: false)));
 
     /// <summary>Optionally re-express a vector as its deviation from the running input mean, updating
     /// that mean if asked. A no-op unless centering is enabled.</summary>

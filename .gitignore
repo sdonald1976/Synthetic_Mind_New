@@ -8,3 +8,6 @@ youtube/
 
 # Per-developer launch profiles (machine-specific paths)
 launchSettings.json
+
+# Exemplar dumps (frames/clips from copyrighted video) — local inspection only, never committed.
+exemplars/
