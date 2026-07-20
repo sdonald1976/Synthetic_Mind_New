@@ -59,6 +59,46 @@ public class VectorQuantizerTests
     }
 
     [Fact]
+    public void Running_mean_subtraction_breaks_the_low_variance_collapse()
+    {
+        // The finding-030 failure, reproduced: every event is a big shared "typical frame" plus a
+        // small scene-specific pattern. Raw, the vectors all point almost the same way (the shared
+        // part dominates) and collapse onto ONE unit — which is exactly what the video side did on
+        // Ms Rachel (98% of events on a single unit). Centering against the running mean cancels the
+        // shared part, so the distinct scenes separate.
+        const int dim = 60, classes = 6;
+        var shared = new float[dim];
+        var s = new Random(99);
+        for (var i = 0; i < dim; i++) shared[i] = 5f + (float)s.NextDouble();   // large, always-present
+        var bumps = new float[classes][];
+        for (var c = 0; c < classes; c++)
+        {
+            bumps[c] = new float[dim];
+            bumps[c][c * (dim / classes)] = 1.5f;                                // small, scene-specific
+        }
+        float[] Sample(int c, Random r)
+        {
+            var v = (float[])shared.Clone();
+            for (var i = 0; i < dim; i++) v[i] += bumps[c][i] + 0.02f * (float)(r.NextDouble() - 0.5);
+            return v;
+        }
+
+        var rng = new Random(4);
+        var raw = new VectorQuantizer(capacity: 64, newUnitThreshold: 0.15f, subtractRunningMean: false);
+        var centered = new VectorQuantizer(capacity: 64, newUnitThreshold: 0.15f, subtractRunningMean: true);
+        for (var t = 0; t < 3000; t++)
+        {
+            var c = rng.Next(classes);
+            var v = Sample(c, rng);
+            raw.Quantize(v);
+            centered.Quantize((float[])v.Clone());
+        }
+
+        Assert.True(raw.Count <= 2, $"raw baseline-dominated vectors should collapse, got {raw.Count} units");
+        Assert.True(centered.Count >= classes, $"centering should recover the {classes} scenes, got {centered.Count} units");
+    }
+
+    [Fact]
     public void Survives_a_save_load_round_trip()
     {
         var rng = new Random(5);

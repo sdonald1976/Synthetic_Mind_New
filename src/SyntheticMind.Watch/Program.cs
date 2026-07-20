@@ -36,7 +36,10 @@ var videoCodebookPath = Path.Combine(AppContext.BaseDirectory, "watch-video-code
 var pairingsPath = Path.Combine(AppContext.BaseDirectory, "watch-pairings.json");
 
 var audioVq = VectorQuantizer.LoadOrNew(audioCodebookPath, capacity: 48, newUnitThreshold: 0.20f);
-var videoVq = VectorQuantizer.LoadOrNew(videoCodebookPath, capacity: 64, newUnitThreshold: 0.30f);
+// Video is a low-variance sense (a talking-head kids' show is nearly the same frame every time), so
+// it must match on each frame's DEVIATION from the typical frame or it collapses onto one unit
+// (finding 030). subtractRunningMean does exactly that.
+var videoVq = VectorQuantizer.LoadOrNew(videoCodebookPath, capacity: 64, newUnitThreshold: 0.30f, subtractRunningMean: true);
 var binder = CrossSituationalBinder.LoadOrNew(pairingsPath);
 if (binder.Episodes > 0)
     Console.WriteLine($"  (resuming: {audioVq.Count} audio + {videoVq.Count} video units, {binder.Episodes} co-occurrences seen earlier)\n");
@@ -48,9 +51,10 @@ var visualWidth = Grid * Grid * (2 + Orientations);
 var retina = new Retina(Grid, motion: true, orientations: Orientations);
 var videoL0 = new Unit(new LearnedPredictiveRule(visualWidth, stateWidth: 12, history: 6, quadraticFeatures: 0));
 
-// Rolling perception summaries + adaptive "event" detection (a spike above the running baseline).
+// Rolling audio summary + adaptive "event" detection (a spike above the running baseline). Video
+// binds on the instantaneous frame at the event (the quantizer does its own running-mean centering),
+// so there is no rolling video summary anymore.
 var audioSummary = new float[MelBands];
-var videoSummary = new float[visualWidth];
 float audioBaseline = 1e-4f, videoBaseline = 1e-4f;
 
 foreach (var video in videos)
@@ -100,7 +104,6 @@ foreach (var video in videos)
         var feat = retina.Process(pixels, CamW, CamH);
         var vs = videoL0.Observe(feat).SquaredError;
         videoBaseline += 0.01f * (vs - videoBaseline);
-        for (var i = 0; i < visualWidth; i++) videoSummary[i] += 0.1f * (feat[i] - videoSummary[i]);
         var videoEvent = vs > 2f * videoBaseline;
 
         // A co-occurring event (both senses spiking), with a cooldown so a busy stretch doesn't
@@ -109,7 +112,7 @@ foreach (var video in videos)
         if (audioEvent && videoEvent && tMs - lastBindMs > 400)
         {
             var au = audioVq.Quantize(audioSummary);
-            var vu = videoVq.Quantize(videoSummary);
+            var vu = videoVq.Quantize(feat);   // this frame, not a time-blur — quantizer centers it
             binder.Observe([au], [vu]);
             lastBindMs = tMs;
             bindsThisVideo++;
