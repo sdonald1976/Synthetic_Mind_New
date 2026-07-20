@@ -4,6 +4,57 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 030 — The eye was collapsing: fixing it made real sound↔sight structure appear
+*2026-07-20 · Batch · `SyntheticMind.Watch` · measured on 28 of 39 Ms Rachel videos, 12,992 co-occurrences*
+
+Finding 029 killed the concept *explosion*. Reading the codebooks it produced revealed the opposite failure hiding underneath: the video side had **collapsed**. Of 12,996 events, **98.4% landed on a single video unit** — the eye wasn't telling scenes apart at all, so the binding had nothing to work with (every sound co-occurred with the one video unit, PMI ≈ 0).
+
+**Cause.** The vector fed to the video quantizer was a heavy running average (EMA) over 600 whole-frame edge features. A talking-head kids' show is nearly the same frame every time; averaged over time it becomes *almost identical every event* (cosine ≈ 1 everywhere), so everything merged onto one unit. Audio dodged this — speech and song are sharp and transient even when smoothed.
+
+**Fix** (made a testable property of `VectorQuantizer`, opt-in so audio is untouched):
+- **`subtractRunningMean`** — match on each input's *deviation* from a running input mean, so the always-present "typical frame" cancels and what's left is what actually distinguishes one scene from another.
+- **Quantize the instantaneous event frame**, not the time-blurred summary.
+
+A test reproduces the exact failure (baseline-dominated vectors → ≤2 units) and proves centering recovers the distinct scenes (≥ classes units). Suite 57/57.
+
+### Result on the real corpus (28 videos opened; 11 wouldn't decode)
+
+| | before fix | after fix |
+|---|---|---|
+| busiest video unit | **98.4%** of events | **15.6%** of events |
+| video units carrying ≥1% | 1 of 13 | **29 of 64** |
+| audio units | 48/48 (already healthy) | 48/48, busiest 21.7% |
+| distinct pairings recurring ≥10× | ~0 meaningful | **319** |
+
+The eye now discriminates, and real cross-situational structure appears — pairings with **both** high PMI and high support (they recur many times, so they're not flukes):
+
+```
+  a#25 <-> v#26   pmi 1.77, seen together 42x
+  a#16 <-> v#45   pmi 1.48, seen together 50x
+  a#2  <-> v#61   pmi 1.20, seen together 34x
+  a#2  <-> v#41   pmi 1.56, seen together 20x
+```
+
+These are specific sound-units repeatedly co-occurring with specific scene-units *across many different videos* — exactly what cross-situational binding is meant to surface, and impossible when one unit swallowed everything.
+
+### Honest limits
+
+- **Structure recovered ≠ concepts named.** `a#25 ↔ v#26` is a real, robust statistical pairing — but we don't yet know *what* it is (a particular song and its on-screen card? a phoneme and a mouth shape?). Interpreting them means dumping the exemplar frames/sounds behind each unit — not done here.
+- **Both codebooks hit their cap** (48/64). Capacity is now the binding constraint, so the granularity is whatever fits in 48+64 slots — chosen, not derived. Real distinctions finer than that still blur together.
+- **PMI and support trade off.** The single highest PMI (a#30↔v#41, 3.75) was seen only 16×; the *most trustworthy* pairings are the high-support ones above. The default min-support (3) is lenient — a 3× pairing on 12,992 episodes is thin.
+- **11 of 39 videos never decoded** (~28% of the corpus lost to codec/download issues) — a data-plumbing loss, not a learning one, but the run saw less than it should have.
+- Still one dominant unit per sense per event, so PMI is doing frequency-discounting, not the harder within-episode disambiguation it's built for.
+
+So: the explosion and the collapse are both fixed, and on a curated single-subject corpus the system now surfaces bounded, recurring, cross-video sound↔sight structure. The next real work is *interpretation* — opening up what those units actually are.
+
+### Next
+
+- **Dump exemplars per unit** (a few frames / audio clips nearest each prototype) so a human can see what `a#25` and `v#26` actually are — the difference between "statistics" and "concepts."
+- Let capacity breathe (or make it adaptive) and see whether finer, still-stable distinctions emerge.
+- Re-fetch the 11 unreadable videos; consider top-N units per event to give PMI genuine disambiguation to do.
+
+---
+
 ## 029 — Bounded consolidation: from a 10k-concept pile to a handful of recurring units
 *2026-07-19 · Batch · `SyntheticMind.Watch` · explosion measured on a real 39-video corpus; fix built + tested*
 
