@@ -4,6 +4,39 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 036 — see → say: a picture makes it speak, grounded end to end
+*2026-07-21 · `SyntheticMind.SeeSay` · full corpus (28 videos) · the loop closed*
+
+The capstone. Every branch built over the last stretch, joined into one path: **show it a picture and it speaks.** It perceives the scene with the same colour retina + video codebook it learned by watching (finding 032), recalls the sound-unit that scene was *bound* to across the corpus (the cross-situational PMI pairings, reverse-looked-up with `HeardForSeen`), and reproduces that sound with the vocal tract it taught itself by babbling (findings 034/035). **No labels anywhere in the entire chain** — not in perceiving the scene, not in knowing its sound, not in producing it.
+
+Proven on 2 videos first (loop correct, but recall undiscriminative — everything fell back to one ever-present "talking" sound). On the **full 28-video corpus**, PMI finally has the cross-video recurrence it needs:
+
+```
+  46 scenes perceived and spoken. Standouts:
+  saw scene-unit 24 (a YELLOW SCHOOL BUS)  -> recalled sound-unit 13 (bound 28x, PMI 1.25) -> said it (58% closer)
+  saw scene-unit 80 (outdoor, person)      -> recalled sound-unit 12 (bound 51x)           -> said it (60% closer)
+  saw scene-unit 24/54 (bus-like)          -> both recalled sound-unit 13                  (consistent)
+```
+The school-bus result is the one that matters: a **distinctive sight recalling a distinctive sound** (almost certainly the "Wheels on the Bus" audio), with two different bus-ish scene-units both landing on the same sound. It saw a bus and said the bus's sound — grounded, unsupervised, end to end.
+
+### Honest limits
+
+- **A common speech sound still wins for generic scenes.** Several non-distinctive scenes (23, 73, 70) all recalled sound-unit #0 — the residual "presenter talking" sound. PMI *discounts* the ever-present sound but doesn't eliminate it; a scene with no distinctive sound of its own falls back to the common one. The bus works because it has *both* a distinctive look and a distinctive sound.
+- **Still-image perception has no motion.** The retina's motion channel is blank for a single frame (the units were learned with motion), a slight mismatch — scenes still map sensibly, but it's a caveat.
+- **"Said" is a vowel approximation.** A held vowel aimed at the recalled sound's averaged timbre — not the sound over time, not intelligible speech. The vowel-only tract and static-timbre limits from findings 034/035 carry through.
+- **Scene → sound, not object → word.** It recalls "the sound that goes with buses," not the word "bus". Grounding is at the level of whole audiovisual context.
+- Recall uses the nearest real exemplar clip as the recalled sound; imitation quality varies with how vowel-like that clip is.
+
+So: a complete, honest, unsupervised **see → say** loop. It is not language, and it says so — but a machine that can look at a picture, recall from its own experience what that picture sounds like, and make that sound with a voice it invented by babbling, having been told *nothing*, is the whole thesis of the project standing on its own two feet.
+
+### Next
+
+- **Suppress the ever-present sound** at recall (e.g. skip units that pair with almost everything) so generic scenes stay silent rather than recalling the chatter.
+- **Temporal production** (a sequence of vocal controls) so it says the sound's trajectory, and **a consonant source** — the road from "makes the bus's vowel-timbre" toward "says a word".
+- **Close the last gap to language**: names. A distinct *object* (not scene) discovered visually, bound to a distinct *spoken token* — object → word, the thing this whole architecture was built to eventually reach.
+
+---
+
 ## 035 — The bridge: it tries to SAY the sounds it discovered by watching
 *2026-07-21 · `SyntheticMind.Voice --say` · the two branches meet*
 
