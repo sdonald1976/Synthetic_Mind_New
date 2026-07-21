@@ -4,6 +4,36 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 035 — The bridge: it tries to SAY the sounds it discovered by watching
+*2026-07-21 · `SyntheticMind.Voice --say` · the two branches meet*
+
+The two halves have been built separately: an **ear** that discovered recurring sound-units by watching Ms Rachel with no labels (findings 031/032), and a **mouth** that learns to reproduce a target sound by babbling (finding 034). This closes them into one loop — perception's discovered sounds become the mouth's production targets.
+
+Each discovered audio unit's closest real clip (saved by the exemplar dumper) is handed to the babbler as a target. It babbles 600×, then tries to reproduce each with its own vocal tract, matching **spectral shape** (`normalizeMel` — the discovered sound is a different instrument at a different level, so timbre, not loudness, is what "saying it" means).
+
+**Result — 48 discovered sound-units:**
+```
+  average 35% closer than chance; 27/48 it can approximate well (>30% closer)
+  best: unit u34 67% closer · u15 61% · u43 56% · u22 56% · u08 55%
+```
+It reproduces roughly half the discovered sounds decently, the best ones well. And the whole chain from raw video to this has **no labels anywhere**: watch Ms Rachel → discover recurring sound-units → say them. Heard-vs-said pairs written to `voice-out/say/`.
+
+### Honest limits
+
+- **It can say about half of them.** The ~21 it can't are consonant-, music- or noise-heavy — outside a vowel-only tract. It says the vowel-like discovered sounds; the rest it can only gesture at.
+- **Static, not temporal.** The target is the *averaged* timbre of a 0.7 s clip, and the reply is a held vowel aimed at that average — not the sound's trajectory over time. A held "ahh", not the word.
+- **"Closer than chance" is a spectral-shape score, not intelligibility.** It aims its formants at the discovered sound; it is not speaking words.
+- **Target is the nearest exemplar clip, not the abstract unit prototype** (the codebooks were cleared during earlier tests; the closest real clip is an honest, arguably better stand-in).
+- **The video grounding isn't in the loop yet** — it says the sound-units, but doesn't yet go *see a scene → recall its bound sound → say it*. That full see→say loop is the next bridge.
+
+### Next
+
+- **Temporal control**: a *sequence* of vocal-tract settings so it can say a sound's trajectory (a syllable), not one held average.
+- **A consonant source** so it can approximate the other half of the units.
+- **Close see→say**: recognise a learned visual scene → recall the sound-unit bound to it (the PMI pairings) → say that. Perception all the way to production, grounded end to end.
+
+---
+
 ## 034 — The mouth: it learns to make sounds by babbling and hearing itself
 *2026-07-21 · `SyntheticMind.Voice` · the action loop, closed*
 

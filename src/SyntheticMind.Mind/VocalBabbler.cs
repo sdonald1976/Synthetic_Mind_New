@@ -16,15 +16,20 @@ public sealed class VocalBabbler
     private readonly Func<float[], float[]> _hear;   // controls → mel (the real synth + cochlea)
     private readonly int _controlDim;
     private readonly int _melDim;
+    private readonly bool _normalizeMel;
     private readonly NlmsRegressor _forward;
     private readonly List<(float[] Control, float[] Mel)> _memory = [];
     private readonly Random _rng;
 
-    public VocalBabbler(int controlDim, int melDim, Func<float[], float[]> hear, int seed = 1)
+    /// <param name="normalizeMel">Match on the spectral SHAPE (L2-normalized mel) rather than raw
+    /// energy. Use it when imitating sounds from a different source — a real voice, a discovered
+    /// sound-unit — where loudness differs but timbre is what "saying the same sound" means.</param>
+    public VocalBabbler(int controlDim, int melDim, Func<float[], float[]> hear, int seed = 1, bool normalizeMel = false)
     {
         _controlDim = controlDim;
         _melDim = melDim;
         _hear = hear;
+        _normalizeMel = normalizeMel;
         _rng = new Random(seed);
         _forward = new NlmsRegressor(FeatureCount(controlDim), melDim);
     }
@@ -105,10 +110,22 @@ public sealed class VocalBabbler
         return f;
     }
 
-    private static float Distance(float[] a, float[] b)
+    private float Distance(float[] a, float[] b)
     {
+        if (_normalizeMel) { a = Unit(a); b = Unit(b); }
         var d = 0f;
         for (var i = 0; i < a.Length; i++) { var e = a[i] - b[i]; d += e * e; }
         return MathF.Sqrt(d);
+    }
+
+    private static float[] Unit(float[] v)
+    {
+        var norm = 0f;
+        foreach (var x in v) norm += x * x;
+        norm = MathF.Sqrt(norm);
+        if (norm < 1e-9f) return v;
+        var u = new float[v.Length];
+        for (var i = 0; i < v.Length; i++) u[i] = v[i] / norm;
+        return u;
     }
 }
