@@ -4,6 +4,39 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 034 — The mouth: it learns to make sounds by babbling and hearing itself
+*2026-07-21 · `SyntheticMind.Voice` · the action loop, closed*
+
+Everything before this was perception. This is the first time the system *acts on the world and learns from the consequence* — the loop the project kept circling (ARCHITECTURE §5): perception → **action** → perception, from error, no teacher. It's given a vocal tract it knows nothing about, and it learns to use it the way an infant does: babble, hear yourself, then reproduce what you hear.
+
+- **`FormantSynth`** — the vocal tract: an additive source-filter synth, three knobs (F0, F1, F2). Formants F1/F2 *are* the vowel space, so different knobs make audibly different vowel-like sounds. Dumb and fixed, like the cochlea — the motor counterpart to the ear.
+- **`VocalBabbler`** — tries random controls, **hears the result through the very same `Cochlea`** it perceives the world with (a `hear` delegate: controls → mel), learns a forward model (controls → sound) online, and remembers every (controls, sound) it makes. To imitate a target sound it recalls the nearest babble and refines it *by listening* (hill-climb on real mel distance).
+
+**Results (400 babbles):**
+```
+  forward-model error (predicting its own voice): 58.7 -> 33.3   (learning what its mouth does)
+  imitating held-out targets in its own range:    95% closer than a random attempt
+      target 3: distance 0.234 vs chance 12.221   (98% closer — near-perfect reproduction)
+  imitating a REAL human voice (a slice of JFK):  21% closer than chance
+```
+It reproduces sounds in its own range almost exactly — genuine vocal imitation, learned from nothing but its own babble and its own ear. WAVs written to `voice-out/` (verified 61/61 tests: the synth makes distinguishable vowels, babbling lowers forward error, imitation beats chance by a wide margin).
+
+### Honest limits
+
+- **Vowels only.** The synth makes voiced formant sounds — no consonants, fricatives or plosives. It can approximate a held vowel, not speech.
+- **Real-voice imitation is weak (21%)** and that's the honest ceiling: a formant buzz is a different instrument from a human, and real speech carries content this tract simply cannot make. It aims its formants at the target; it can't be it.
+- **Static, not temporal.** It imitates an averaged timbre — one held sound, no syllable dynamics, no sequence. A vowel, not a word.
+- **The forward model is the smaller half.** The 58→33 drop shows it's learning the map, but imitation leans mostly on the babble memory + listening hill-climb. The learned inverse isn't doing the heavy lifting yet.
+- **Not yet wired to perception.** It imitates arbitrary targets, but doesn't yet try to *say the sound-units it discovered watching videos*. That bridge is the point of having both halves.
+
+### Next
+
+- **Bridge mouth to ear-grounded concepts**: feed it the discovered audio-unit prototypes (finding 031/032) as targets — it tries to reproduce the sounds it learned by watching. Perception's units become production goals.
+- **A richer tract** (a noise source for consonants) to get beyond vowels.
+- **Temporal control** (a *sequence* of knob settings) → syllables instead of a single held sound.
+
+---
+
 ## 033 — Frame-skip: a real 25%, and an honest lesson about where the time goes
 *2026-07-21 · Batch · `SyntheticMind.Watch --stride N` · measured A/B/C on one clip*
 

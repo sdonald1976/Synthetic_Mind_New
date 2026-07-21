@@ -1,0 +1,86 @@
+using SyntheticMind.Audio;
+using SyntheticMind.Mind;
+
+namespace SyntheticMind.Tests;
+
+/// <summary>
+/// Finding 034 — the mouth. A vocal tract it knows nothing about at first; it babbles, hears itself
+/// through the same cochlea it perceives with, learns the controls→sound map, and reproduces target
+/// sounds. No labels, no target weights — the infant babble-then-imitate loop.
+/// </summary>
+public class VocalTests
+{
+    private const int SR = 16000, Fft = 512, Mel = 20, Hop = 160, Clip = 4000;
+
+    private static float[] MelOf(Cochlea c, float[] wave)
+    {
+        var acc = new float[Mel];
+        var n = 0;
+        for (var p = 0; p + Fft <= wave.Length; p += Hop)
+        {
+            var m = c.Process(wave[p..(p + Fft)]);
+            for (var i = 0; i < Mel; i++) acc[i] += m[i];
+            n++;
+        }
+        for (var i = 0; i < Mel; i++) acc[i] /= n;
+        return acc;
+    }
+
+    private static (VocalBabbler Babbler, Func<float[], float[]> Hear) NewBabbler(int seed)
+    {
+        var synth = new FormantSynth(SR);
+        var cochlea = new Cochlea(SR, Fft, Mel);
+        float[] Hear(float[] c) => MelOf(cochlea, synth.Synthesize(c, Clip));
+        return (new VocalBabbler(synth.ControlCount, Mel, Hear, seed), Hear);
+    }
+
+    [Fact]
+    public void The_synth_makes_distinguishable_vowels()
+    {
+        var synth = new FormantSynth(SR);
+        var cochlea = new Cochlea(SR, Fft, Mel);
+
+        // Two very different formant settings (an "ee"-ish vs an "aw"-ish region of the vowel space).
+        var a = MelOf(cochlea, synth.Synthesize([0.3f, 0.1f, 0.9f], Clip));
+        var b = MelOf(cochlea, synth.Synthesize([0.3f, 0.9f, 0.1f], Clip));
+        var same = MelOf(cochlea, synth.Synthesize([0.3f, 0.1f, 0.9f], Clip));
+
+        Assert.Equal(0f, Dist(a, same), 3);                     // deterministic
+        Assert.True(Dist(a, b) > 2f, $"different formants should sound different, got {Dist(a, b):F2}");
+    }
+
+    [Fact]
+    public void Babbling_lowers_the_forward_model_error()
+    {
+        var (babbler, _) = NewBabbler(seed: 2);
+        float early = 0, late = 0; int en = 0, ln = 0;
+        for (var i = 0; i < 400; i++)
+        {
+            var e = babbler.Babble();
+            if (i < 80) { early += e; en++; }
+            else if (i >= 320) { late += e; ln++; }
+        }
+        Assert.True(late / ln < early / en, $"forward-model error should fall: {early / en:F2} -> {late / ln:F2}");
+    }
+
+    [Fact]
+    public void It_imitates_a_target_far_better_than_chance()
+    {
+        var (babbler, hear) = NewBabbler(seed: 3);
+        for (var i = 0; i < 400; i++) babbler.Babble();
+
+        // A held-out target from the same vocal range — a reproducible solution provably exists.
+        var targetMel = hear([0.4f, 0.7f, 0.3f]);
+        var (_, _, dist) = babbler.Imitate(targetMel);
+        var chance = babbler.ChanceDistance(targetMel);
+
+        Assert.True(dist < 0.4f * chance, $"imitation ({dist:F2}) should be far under chance ({chance:F2})");
+    }
+
+    private static float Dist(float[] a, float[] b)
+    {
+        var d = 0f;
+        for (var i = 0; i < a.Length; i++) { var e = a[i] - b[i]; d += e * e; }
+        return MathF.Sqrt(d);
+    }
+}
