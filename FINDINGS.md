@@ -4,6 +4,38 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 037 — object → word: the plumbing works, a real hit exists, but faces swamp it
+*2026-07-21 · `SyntheticMind.Name` · the summit — reached partway, honestly*
+
+The hardest step, toward NAMES: bind a discrete *object* (a salient sub-region, not the whole scene) to a discrete *word* (a voiced run cut from continuous speech, not a whole clip). New fixed front-ends — `ObjectAttention` (a saliency fovea) and `WordSegmenter` (energy VAD, tractable because child-directed speech isolates words with pauses) — feed the same cross-situational PMI binder.
+
+**It works as plumbing, and on 2 videos it produced a genuine hit:** attention isolated a red **fire truck** on its own and bound it to a word 13× (PMI 2.61). That is exactly the target — an object, not a scene, tied to a word. Proof the mechanism *can* do the thing.
+
+**But at full-corpus scale it's swamped by faces.** 106,737 co-occurrences, 64 object + 48 word units, and the top pairings by PMI are all the presenter's face:
+```
+  word #20 <-> object #42 (Ms Rachel's face)   pmi 1.75, 11x
+  word #37 <-> object #46 (Ms Rachel's face)   pmi 1.74,  6x
+  word #10 <-> object #9  (Ms Rachel's face)   pmi 1.62,  7x
+```
+
+### Why PMI didn't rescue it this time (the real lesson)
+
+In see→say, one *single* ever-present sound dominated, so PMI discounted that one unit and the distinctive scenes surfaced. Faces don't behave that way: attention lands on the face constantly, but the face **fragments into many object-units** (different framings, expressions, headband colours). No single face-unit co-occurs with *everything*, so none gets discounted — instead each face-framing pairs at moderate PMI with the common words said in it. Fragmentation defeats the PMI trick. **Saliency ≠ objecthood, and faces win the saliency vote**, so the object side is mostly faces and the real objects (the fire truck) are buried.
+
+### Honest limits
+
+- **This is the first capability that didn't work at scale.** The loop is correct and the front-ends are individually sound (tested), but the *result* on the full corpus is face-dominated, not object→word. The 2-video fire-truck hit is real but not representative of the rankings.
+- **The bottleneck is attention, not binding.** PMI is doing its job; it's being fed faces. Better objects in → better words out.
+- Word units unverified by ear here; the object failure dominates the story regardless.
+
+### Next — this is where breadth should turn to depth
+
+- **Novelty attention instead of saliency**: attend to what *appeared/changed* rather than what merely stands out. A held-up object is novel; the presenter's face is always there. This directly targets the face problem — the face is high-saliency but low-novelty.
+- Or explicit face-suppression (skin-tone / persistent-region down-weighting).
+- This is the honest place the project's own reflection pointed to: stop adding loops, make *one* front-end (attention) actually good, so object→word stops being "a real hit buried in faces" and becomes solid.
+
+---
+
 ## 036 — see → say: a picture makes it speak, grounded end to end
 *2026-07-21 · `SyntheticMind.SeeSay` · full corpus (28 videos) · the loop closed*
 
