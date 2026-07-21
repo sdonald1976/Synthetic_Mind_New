@@ -58,6 +58,24 @@ public sealed class CrossSituationalBinder
         return best;
     }
 
+    /// <summary>The heard (sound) unit most strongly bound to a given seen (sight) unit — the reverse
+    /// of <see cref="ReferentOf"/>, for see→say: perceive a scene, recall the sound that goes with it.
+    /// Requires a minimum joint count so a one-off coincidence can't be recalled as "the" sound.</summary>
+    public (int Heard, double Pmi, int JointCount)? HeardForSeen(int seenUnit, int minJointCount = 3)
+    {
+        if (_episodes == 0 || !_seen.TryGetValue(seenUnit, out var seenCount)) return null;
+
+        (int Heard, double Pmi, int JointCount)? best = null;
+        var bestPmi = double.NegativeInfinity;
+        foreach (var (heard, heardCount) in _heard)
+        {
+            if (!_joint.TryGetValue((heard, seenUnit), out var jointCount) || jointCount < minJointCount) continue;
+            var pmi = Math.Log(((double)jointCount / _episodes) / (((double)heardCount / _episodes) * ((double)seenCount / _episodes)));
+            if (pmi > bestPmi) { bestPmi = pmi; best = (heard, pmi, jointCount); }
+        }
+        return best;
+    }
+
     /// <summary>
     /// The strongest recurring sound↔sight pairings, ranked by PMI. A minimum joint count is required
     /// so a pair that happened to co-occur once (infinite-looking PMI) can't top a pairing that

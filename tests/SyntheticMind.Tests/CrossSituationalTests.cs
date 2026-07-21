@@ -78,6 +78,29 @@ public class CrossSituationalTests
     }
 
     [Fact]
+    public void HeardForSeen_recalls_the_scene_s_bound_sound_not_the_constant_chatter()
+    {
+        // see→say's lookup: for a sight, recall the sound bound to it. Sound #99 is constant chatter
+        // (present every episode); sound o is the one that actually goes with sight o. PMI must recall
+        // o, not the ever-present chatter.
+        var rng = new Random(5);
+        var binder = new CrossSituationalBinder();
+        for (var e = 0; e < 600; e++)
+        {
+            var o = rng.Next(Objects);
+            binder.Observe(new List<int> { o, 99 }, new List<int> { o });
+        }
+
+        for (var o = 0; o < Objects; o++)
+        {
+            var recalled = binder.HeardForSeen(o, minJointCount: 5);
+            Assert.NotNull(recalled);
+            Assert.Equal(o, recalled!.Value.Heard);
+        }
+        Assert.Null(binder.HeardForSeen(12345));   // an unseen scene recalls nothing
+    }
+
+    [Fact]
     public void TopPairings_surfaces_recurring_true_pairs_and_ignores_a_constant_distractor()
     {
         // The watcher's real problem: one sight (say #99, "the presenter's face") is on screen almost
