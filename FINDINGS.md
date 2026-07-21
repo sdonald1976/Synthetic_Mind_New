@@ -4,6 +4,34 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 032 — A sharper, colour eye: finer in places, still lumping in others
+*2026-07-21 · Batch · `SyntheticMind.Watch` · colour retina, re-run on the same corpus*
+
+The finding-031 units were scene-level, and the eye was throwing away colour (`BGR2GRAY`) — the single biggest cue in this content (pink Ms Rachel, red Elmo, green backdrop, teal vocabulary cards are identical in brightness). So we sharpened it: **mean R/G/B per cell**, grid 10→12, input 80×60→120×90, video codebook 64→96. Feature width 600 → 1296. Then re-ran the whole corpus (one decode pass — learn + exemplars together, the finding-031 fix).
+
+**Result: a genuine but partial win.** Spread stayed healthy (busiest video unit 12.8%, down from 15.6%; 31 of 96 units carry ≥1%). And colour surfaced scene-types the grey eye *couldn't* have found:
+- **video #88** — the "vocabulary card" segment: teal polka-dot backdrop with a labelled object card ("Towel"). Keyed on that distinctive teal. Internally coherent, genuinely specific.
+
+But other units still **lump distinct scenes**:
+- **video #60** (68× with audio #17) — its exemplars mix the *living-room airplane set* (blue couch, checkerboard floor) with the *outdoor counting scene* (green hills, pond). Two clearly different scenes, one unit.
+
+**Why the lumping persists.** The 96-slot codebook fills early (by the 2nd or 3rd video), and once full every later event is force-merged into its nearest existing unit — so a distinct scene that arrives late (the airplane set) gets absorbed into whatever is closest rather than starting its own unit. The bottleneck is no longer colour; it's **capacity + the fill-then-force-merge dynamic**. Colour added real discriminative *information*; the codebook just can't hold enough distinctions to use all of it.
+
+### Honest limits
+
+- **Still scene-level, not object-level.** Colour made scenes *cleaner and more specific* (the teal cards), not "Elmo" or "the number 2". The whole-frame summary can't isolate an object from its scene.
+- **Mixed coherence.** Some units sharpened (#88), some still lump (#60). Not audited at scale — this is two hand-picked units, best and worst of the ones inspected.
+- **It got expensive.** ~3.5 hours vs. ~40 min for grey — colour + 2.25× the pixels tripled-plus the per-frame cost. **Runtime is now the practical bottleneck**, which makes the next experiments painful.
+- Video capacity (96) fills to the cap, so the count is capped-out, not settled — genuine distinctions past 96 are lost.
+
+### Next
+
+- **Frame-skip** (process every Nth frame — events are sparse, we decode 216k frames to catch ~500 events). 3–5× faster, near-zero loss. Makes bigger experiments affordable — do this first.
+- **Raise video capacity** (128–192) now colour gives it more to separate, and see if #60-type lumps split.
+- **Toward object-level**: attention to sub-regions instead of a whole-frame summary, and top-N units per event so PMI has real within-scene disambiguation.
+
+---
+
 ## 031 — We looked: the units are real, coherent, cross-video scenes
 *2026-07-21 · Batch · `SyntheticMind.Watch --exemplars` · frames read back by a human (Claude)*
 
