@@ -15,12 +15,12 @@ using SyntheticMind.Vision;
 // (no human trigger) into a persistent CrossModalStore. This is the finding 021/022 mechanism,
 // unsupervised, at file scale.
 //
-// EXEMPLAR MODE — read-only, turns the anonymous unit ids into something a human can interpret:
+// EXEMPLARS — add --exemplars to turn the anonymous unit ids into something a human can interpret:
 //   dotnet run --project src/SyntheticMind.Watch -- <folder> --exemplars [outdir]
-// It replays the videos with the ALREADY-LEARNED codebooks (never mutating them), and for each
-// discovered unit saves the handful of real frames / audio clips that best exemplify it, plus an
-// index.html laying the strongest sound<->sight pairings side by side. This is how you find out
-// whether "audio #16 <-> video #45" is the alphabet song and its on-screen card, or just noise.
+// It learns AND samples in the SAME decode pass (finding 031 lesson — decode once, not three times):
+// for each discovered unit it keeps the handful of real frames / audio clips closest to its
+// prototype, then writes an index.html laying the strongest sound<->sight pairings side by side.
+// This is how you find out whether "audio #16 <-> video #45" is a real concept or just noise.
 
 const int SampleRate = 16000, Hop = 160, MelBands = 20, Grid = 10, Orientations = 4, CamW = 80, CamH = 60;
 
@@ -38,7 +38,7 @@ var videos = Directory.Exists(folder)
     ? Directory.GetFiles(folder).Where(f => extensions.Contains(Path.GetExtension(f).ToLowerInvariant())).OrderBy(f => f).ToArray()
     : [];
 
-Console.WriteLine($"\n  SyntheticMind — {(dumpExemplars ? "dumping exemplars from" : "watching")} {videos.Length} video(s) in {folder}\n");
+Console.WriteLine($"\n  SyntheticMind — watching {videos.Length} video(s) in {folder}{(dumpExemplars ? " (+ dumping exemplars)" : "")}\n");
 if (videos.Length == 0) { Console.WriteLine("  no videos found. pass a folder: dotnet run -- <folder>\n"); return; }
 
 // Consolidation + cross-situational binding (finding 029). Bounded codebooks fold the messy real
@@ -50,12 +50,6 @@ var audioCodebookPath = Path.Combine(AppContext.BaseDirectory, "watch-audio-code
 var videoCodebookPath = Path.Combine(AppContext.BaseDirectory, "watch-video-codebook.json");
 var pairingsPath = Path.Combine(AppContext.BaseDirectory, "watch-pairings.json");
 
-if (dumpExemplars && !(File.Exists(audioCodebookPath) && File.Exists(videoCodebookPath) && File.Exists(pairingsPath)))
-{
-    Console.WriteLine($"  no learned codebooks found next to the exe. Run the watcher first:\n    dotnet run --project src/SyntheticMind.Watch -- {folder}\n");
-    return;
-}
-
 var audioVq = VectorQuantizer.LoadOrNew(audioCodebookPath, capacity: 48, newUnitThreshold: 0.20f);
 // Video is a low-variance sense (a talking-head kids' show is nearly the same frame every time), so
 // it must match on each frame's DEVIATION from the typical frame or it collapses onto one unit
@@ -63,7 +57,7 @@ var audioVq = VectorQuantizer.LoadOrNew(audioCodebookPath, capacity: 48, newUnit
 var videoVq = VectorQuantizer.LoadOrNew(videoCodebookPath, capacity: 64, newUnitThreshold: 0.30f, subtractRunningMean: true);
 var binder = CrossSituationalBinder.LoadOrNew(pairingsPath);
 if (binder.Episodes > 0)
-    Console.WriteLine($"  ({(dumpExemplars ? "using" : "resuming")}: {audioVq.Count} audio + {videoVq.Count} video units, {binder.Episodes} co-occurrences)\n");
+    Console.WriteLine($"  (resuming: {audioVq.Count} audio + {videoVq.Count} video units, {binder.Episodes} co-occurrences)\n");
 
 // Exemplar mode keeps, per unit, the K closest real frames / audio clips (smallest cosine distance
 // to the prototype = the most textbook examples). Bounded so memory stays flat over a long corpus.
@@ -149,25 +143,23 @@ foreach (var video in videos)
         var videoEvent = vs > 2f * videoBaseline;
 
         // A co-occurring event (both senses spiking), with a cooldown so a busy stretch doesn't
-        // flood it. Same event gating in both modes, so exemplars are drawn from the exact same
-        // event population the units were built from.
+        // flood it. One decode pass learns and (optionally) samples exemplars together.
         if (audioEvent && videoEvent && tMs - lastBindMs > 400)
         {
+            var au = audioVq.Quantize(audioSummary);
+            var vu = videoVq.Quantize(feat);   // this frame, not a time-blur — quantizer centers it
+            binder.Observe([au], [vu]);
+
+            // Decode-once: if we're collecting exemplars, do it right here in the SAME pass that
+            // learns (finding 031's lesson — no separate read-only replay). The distance to the
+            // just-updated prototype ranks how well this frame/clip exemplifies its unit.
             if (dumpExemplars)
             {
-                // Read-only: find which unit each sense matches and how well (distance), then keep
-                // this frame / audio clip if it's among the closest exemplars for that unit.
-                var (au, ad) = audioVq.Match(audioSummary);
-                var (vu, vd) = videoVq.Match(feat);
+                var vd = videoVq.DistanceTo(vu, feat);
+                var ad = audioVq.DistanceTo(au, audioSummary);
                 Cv2.ImEncode(".jpg", frame, out var jpg, [(int)ImwriteFlags.JpegQuality, 82]);
                 KeepVideo(vu, vd, jpg, name, tMs);
                 KeepAudio(au, ad, ClipAround(samples, SampleRate, tMs, 0.7), name, tMs);
-            }
-            else
-            {
-                var au = audioVq.Quantize(audioSummary);
-                var vu = videoVq.Quantize(feat);   // this frame, not a time-blur — quantizer centers it
-                binder.Observe([au], [vu]);
             }
             lastBindMs = tMs;
             bindsThisVideo++;
@@ -175,25 +167,14 @@ foreach (var video in videos)
         frames++;
     }
 
-    if (!dumpExemplars)
-    {
-        audioVq.Save(audioCodebookPath);
-        videoVq.Save(videoCodebookPath);
-        binder.Save(pairingsPath);
-    }
+    audioVq.Save(audioCodebookPath);
+    videoVq.Save(videoCodebookPath);
+    binder.Save(pairingsPath);
     var learned = lateN > 0 && earlyN > 0 ? $"surprise {earlyAudio / earlyN:F3} -> {lateAudio / Math.Max(1, lateN):F3}" : "n/a";
-    var tail = dumpExemplars ? $"{bindsThisVideo} events sampled" : $"{bindsThisVideo} events -> {audioVq.Count} audio / {videoVq.Count} video units (audio {learned})";
-    Console.WriteLine($"  {name,-28} {frames,4} frames, {samples.Length / SampleRate}s audio | {tail}");
+    Console.WriteLine($"  {name,-28} {frames,4} frames, {samples.Length / SampleRate}s audio | {bindsThisVideo} events -> {audioVq.Count} audio / {videoVq.Count} video units (audio {learned})");
 }
 
 if (dumpExemplars)
-{
-    WriteExemplars(exemplarDir, audioExemplars, videoExemplars, audioVq, videoVq, binder, SampleRate);
-    Console.WriteLine($"\n  done. wrote exemplars for {videoExemplars.Count} video + {audioExemplars.Count} audio units to {exemplarDir}");
-    Console.WriteLine($"  open {Path.Combine(exemplarDir, "index.html")} to see what each unit actually is.\n");
-    return;
-}
-
 Console.WriteLine($"\n  done. consolidated {binder.Episodes} co-occurrences into {audioVq.Count} audio + {videoVq.Count} video units (bounded — no more 10k-concept pile).");
 var top = binder.TopPairings(10, minJointCount: 3);
 if (top.Count > 0)
@@ -205,6 +186,13 @@ if (top.Count > 0)
 else
 {
     Console.WriteLine("  no pairing recurred often enough to report yet (need more footage).");
+}
+
+if (dumpExemplars)
+{
+    WriteExemplars(exemplarDir, audioExemplars, videoExemplars, audioVq, videoVq, binder, SampleRate);
+    Console.WriteLine($"\n  wrote exemplars for {videoExemplars.Count} video + {audioExemplars.Count} audio units to {exemplarDir}");
+    Console.WriteLine($"  open {Path.Combine(exemplarDir, "index.html")} to see what each unit actually is.");
 }
 Console.WriteLine();
 

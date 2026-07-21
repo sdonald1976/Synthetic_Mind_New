@@ -82,6 +82,14 @@ public sealed class VectorQuantizer
     public (int Unit, float Distance) Match(float[] v)
         => _prototypes.Count == 0 ? (-1, float.MaxValue) : Nearest(Normalized(Center(v, update: false)));
 
+    /// <summary>Cosine distance from a vector to a SPECIFIC unit's prototype, WITHOUT learning. Lets
+    /// the exemplar dumper rank frames against the unit they were just assigned to, in one pass.</summary>
+    public float DistanceTo(int unit, float[] v)
+    {
+        if (unit < 0 || unit >= _prototypes.Count) return float.MaxValue;
+        return 1f - TensorPrimitives.Dot<float>(Normalized(Center(v, update: false)), _prototypes[unit]);
+    }
+
     /// <summary>Optionally re-express a vector as its deviation from the running input mean, updating
     /// that mean if asked. A no-op unless centering is enabled.</summary>
     private float[] Center(float[] v, bool update)
