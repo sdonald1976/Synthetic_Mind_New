@@ -48,6 +48,10 @@ public sealed class VectorQuantizer
     /// <summary>The hard ceiling on unit count.</summary>
     public int Capacity => _capacity;
 
+    /// <summary>Length of the vectors this codebook holds, or -1 if still empty. Lets a caller detect
+    /// a stale codebook (e.g. the retina's feature width changed) and start fresh instead of crashing.</summary>
+    public int Dimension => _prototypes.Count > 0 ? _prototypes[0].Length : -1;
+
     /// <summary>How many vectors have been assigned to a given unit.</summary>
     public int CountOf(int unit) => _counts[unit];
 

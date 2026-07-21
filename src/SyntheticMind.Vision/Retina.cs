@@ -9,6 +9,9 @@ namespace SyntheticMind.Vision;
 /// Per frame, over a downsampled grid of cells:
 ///   - BRIGHTNESS — what's light and dark, roughly where
 ///   - MOTION — how much each cell changed since last frame (optional)
+///   - COLOR — the mean red/green/blue of each cell (optional). Grayscale throws away the single
+///     biggest cue in colourful content: pink shirt vs. green backdrop vs. red Elmo are identical
+///     in brightness but obvious in colour (finding 032).
 ///   - ORIENTED EDGES — a small histogram of gradient orientations per cell (optional): where the
 ///     edges are and which way they run. Two objects that share brightness but differ in shape
 ///     look the same to brightness alone and different here.
@@ -17,28 +20,38 @@ public sealed class Retina
 {
     private readonly int _grid;
     private readonly bool _motion;
+    private readonly bool _color;
     private readonly int _orientations;
     private float[]? _previousBrightness;
 
-    public Retina(int grid = 8, bool motion = true, int orientations = 0)
+    public Retina(int grid = 8, bool motion = true, int orientations = 0, bool color = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(grid);
         ArgumentOutOfRangeException.ThrowIfNegative(orientations);
         _grid = grid;
         _motion = motion;
+        _color = color;
         _orientations = orientations;
     }
 
-    /// <summary>Feature width: brightness + optional motion + optional oriented-edge bins, all per cell.</summary>
-    public int Width => _grid * _grid * (1 + (_motion ? 1 : 0) + _orientations);
+    /// <summary>Feature width: brightness + optional motion + optional colour (3) + optional oriented-edge bins, all per cell.</summary>
+    public int Width => _grid * _grid * (1 + (_motion ? 1 : 0) + (_color ? 3 : 0) + _orientations);
 
-    public float[] Process(float[] pixels, int width, int height)
+    /// <summary>Whether this retina expects red/green/blue planes passed to <see cref="Process"/>.</summary>
+    public bool UsesColor => _color;
+
+    /// <param name="pixels">Grayscale/luminance plane — brightness, motion and edges are read from this.</param>
+    /// <param name="red">Red, green, blue planes (same size as <paramref name="pixels"/>), required when
+    /// colour is enabled; ignored otherwise.</param>
+    public float[] Process(float[] pixels, int width, int height, float[]? red = null, float[]? green = null, float[]? blue = null)
     {
         if (pixels.Length != width * height)
             throw new ArgumentException($"Expected {width * height} pixels, got {pixels.Length}.", nameof(pixels));
+        if (_color && (red is null || green is null || blue is null))
+            throw new ArgumentException("Colour retina needs red/green/blue planes.", nameof(red));
 
         var cells = _grid * _grid;
-        var brightness = BrightnessGrid(pixels, width, height);
+        var brightness = MeanGrid(pixels, width, height);
 
         var output = new float[Width];
         Array.Copy(brightness, 0, output, 0, cells);
@@ -52,6 +65,15 @@ public sealed class Retina
             offset += cells;
         }
 
+        if (_color)
+        {
+            foreach (var plane in new[] { red!, green!, blue! })
+            {
+                Array.Copy(MeanGrid(plane, width, height), 0, output, offset, cells);
+                offset += cells;
+            }
+        }
+
         if (_orientations > 0)
             AccumulateOrientedEdges(pixels, width, height, output, offset);
 
@@ -60,7 +82,7 @@ public sealed class Retina
 
     public void Reset() => _previousBrightness = null;
 
-    private float[] BrightnessGrid(float[] pixels, int width, int height)
+    private float[] MeanGrid(float[] plane, int width, int height)
     {
         var grid = new float[_grid * _grid];
         for (var gy = 0; gy < _grid; gy++)
@@ -73,7 +95,7 @@ public sealed class Retina
                 var x1 = Math.Max(x0 + 1, (gx + 1) * width / _grid);
                 var sum = 0f; var n = 0;
                 for (var y = y0; y < y1; y++)
-                    for (var x = x0; x < x1; x++) { sum += pixels[y * width + x]; n++; }
+                    for (var x = x0; x < x1; x++) { sum += plane[y * width + x]; n++; }
                 grid[gy * _grid + gx] = sum / n;
             }
         }

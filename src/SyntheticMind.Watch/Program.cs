@@ -22,7 +22,8 @@ using SyntheticMind.Vision;
 // prototype, then writes an index.html laying the strongest sound<->sight pairings side by side.
 // This is how you find out whether "audio #16 <-> video #45" is a real concept or just noise.
 
-const int SampleRate = 16000, Hop = 160, MelBands = 20, Grid = 10, Orientations = 4, CamW = 80, CamH = 60;
+// Sharper eye (finding 032): a finer grid, higher input resolution, and — the big one — COLOUR.
+const int SampleRate = 16000, Hop = 160, MelBands = 20, Grid = 12, Orientations = 4, CamW = 120, CamH = 90;
 
 var argList = args.ToList();
 var exFlag = argList.IndexOf("--exemplars");
@@ -41,6 +42,13 @@ var videos = Directory.Exists(folder)
 Console.WriteLine($"\n  SyntheticMind — watching {videos.Length} video(s) in {folder}{(dumpExemplars ? " (+ dumping exemplars)" : "")}\n");
 if (videos.Length == 0) { Console.WriteLine("  no videos found. pass a folder: dotnet run -- <folder>\n"); return; }
 
+// Shared pipelines — they keep learning across the whole folder, not per file. Colour retina.
+var cochlea = new Cochlea(SampleRate, 512, MelBands);
+var audioL0 = new Unit(new LearnedPredictiveRule(MelBands, stateWidth: 8, history: 8, quadraticFeatures: 0));
+var retina = new Retina(Grid, motion: true, orientations: Orientations, color: true);
+var visualWidth = retina.Width;
+var videoL0 = new Unit(new LearnedPredictiveRule(visualWidth, stateWidth: 12, history: 6, quadraticFeatures: 0));
+
 // Consolidation + cross-situational binding (finding 029). Bounded codebooks fold the messy real
 // events into a SMALL set of recurring units instead of minting a fresh "concept" every time (the
 // ~10k-concept explosion we watched on 39 videos). A PMI layer over those unit ids then finds the
@@ -53,9 +61,19 @@ var pairingsPath = Path.Combine(AppContext.BaseDirectory, "watch-pairings.json")
 var audioVq = VectorQuantizer.LoadOrNew(audioCodebookPath, capacity: 48, newUnitThreshold: 0.20f);
 // Video is a low-variance sense (a talking-head kids' show is nearly the same frame every time), so
 // it must match on each frame's DEVIATION from the typical frame or it collapses onto one unit
-// (finding 030). subtractRunningMean does exactly that.
-var videoVq = VectorQuantizer.LoadOrNew(videoCodebookPath, capacity: 64, newUnitThreshold: 0.30f, subtractRunningMean: true);
+// (finding 030). subtractRunningMean does exactly that. Bigger codebook now the eye sees colour.
+var videoVq = VectorQuantizer.LoadOrNew(videoCodebookPath, capacity: 96, newUnitThreshold: 0.30f, subtractRunningMean: true);
 var binder = CrossSituationalBinder.LoadOrNew(pairingsPath);
+
+// If the retina's feature width changed since these codebooks were saved (e.g. we just added colour),
+// the old video prototypes are a different shape — resume would bind meaningless ids. Start fresh.
+if (videoVq.Count > 0 && videoVq.Dimension != visualWidth)
+{
+    Console.WriteLine($"  (retina changed: video features {videoVq.Dimension} -> {visualWidth}; starting learned state fresh)");
+    audioVq = new VectorQuantizer(capacity: 48, newUnitThreshold: 0.20f);
+    videoVq = new VectorQuantizer(capacity: 96, newUnitThreshold: 0.30f, subtractRunningMean: true);
+    binder = new CrossSituationalBinder();
+}
 if (binder.Episodes > 0)
     Console.WriteLine($"  (resuming: {audioVq.Count} audio + {videoVq.Count} video units, {binder.Episodes} co-occurrences)\n");
 
@@ -80,13 +98,6 @@ void KeepAudio(int unit, float dist, float[] clip, string src, double tMs)
     if (list.Count > ExemplarsPerUnit) { list.Sort((a, b) => a.Dist.CompareTo(b.Dist)); list.RemoveAt(list.Count - 1); }
 }
 
-// Shared pipelines — they keep learning across the whole folder, not per file.
-var cochlea = new Cochlea(SampleRate, 512, MelBands);
-var audioL0 = new Unit(new LearnedPredictiveRule(MelBands, stateWidth: 8, history: 8, quadraticFeatures: 0));
-var visualWidth = Grid * Grid * (2 + Orientations);
-var retina = new Retina(Grid, motion: true, orientations: Orientations);
-var videoL0 = new Unit(new LearnedPredictiveRule(visualWidth, stateWidth: 12, history: 6, quadraticFeatures: 0));
-
 // Rolling audio summary + adaptive "event" detection (a spike above the running baseline). Video
 // binds on the instantaneous frame at the event (the quantizer does its own running-mean centering),
 // so there is no rolling video summary anymore.
@@ -105,10 +116,12 @@ foreach (var video in videos)
     var audio = new AudioStream(Pull, cochlea, Hop, normalize: false);
 
     using var frame = new Mat();
-    using var gray = new Mat();
     using var small = new Mat();
-    var pixels = new float[CamW * CamH];
-    var bytes = new byte[CamW * CamH];
+    var pixels = new float[CamW * CamH];                 // luma, for brightness/motion/edges
+    var red = new float[CamW * CamH];
+    var green = new float[CamW * CamH];
+    var blue = new float[CamW * CamH];
+    var bgr = new byte[CamW * CamH * 3];
 
     int frames = 0, hopsDone = 0, bindsThisVideo = 0;
     float earlyAudio = 0, lateAudio = 0; int earlyN = 0, lateN = 0;
@@ -132,12 +145,16 @@ foreach (var video in videos)
             hopsDone++;
         }
 
-        // Video frame → retina → level 0.
-        Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
-        Cv2.Resize(gray, small, new Size(CamW, CamH));
-        Marshal.Copy(small.Data, bytes, 0, bytes.Length);
-        for (var i = 0; i < bytes.Length; i++) pixels[i] = bytes[i] / 255f;
-        var feat = retina.Process(pixels, CamW, CamH);
+        // Video frame → colour resize → R/G/B planes + luma → retina → level 0.
+        Cv2.Resize(frame, small, new Size(CamW, CamH));           // stays BGR (CV_8UC3)
+        Marshal.Copy(small.Data, bgr, 0, bgr.Length);
+        for (var i = 0; i < CamW * CamH; i++)
+        {
+            float b = bgr[i * 3] / 255f, g = bgr[i * 3 + 1] / 255f, r = bgr[i * 3 + 2] / 255f;
+            blue[i] = b; green[i] = g; red[i] = r;
+            pixels[i] = 0.114f * b + 0.587f * g + 0.299f * r;     // luma
+        }
+        var feat = retina.Process(pixels, CamW, CamH, red, green, blue);
         var vs = videoL0.Observe(feat).SquaredError;
         videoBaseline += 0.01f * (vs - videoBaseline);
         var videoEvent = vs > 2f * videoBaseline;

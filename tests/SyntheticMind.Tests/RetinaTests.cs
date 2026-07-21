@@ -86,5 +86,39 @@ public class RetinaTests
     {
         Assert.Equal(4 * 4 * (1 + 1 + 4), new Retina(grid: 4, motion: true, orientations: 4).Width);
         Assert.Equal(4 * 4, new Retina(grid: 4, motion: false, orientations: 0).Width);
+        Assert.Equal(4 * 4 * (1 + 3), new Retina(grid: 4, motion: false, color: true).Width);   // + R,G,B
+    }
+
+    [Fact]
+    public void Colour_tells_apart_regions_that_brightness_cannot()
+    {
+        const int w = 16, h = 16;
+        // Two frames with the SAME luma everywhere (0.5) but opposite colour: one red, one green.
+        // To brightness/edges they're identical; only the colour channels can tell them apart —
+        // exactly the pink-shirt-vs-green-backdrop cue grayscale was throwing away (finding 032).
+        var red = new float[w * h]; var green = new float[w * h]; var blue = new float[w * h];
+        var luma = new float[w * h];
+        for (var i = 0; i < w * h; i++) { luma[i] = 0.5f; }
+
+        var retinaA = new Retina(grid: 2, motion: false, color: true);
+        var redPlane = new float[w * h]; Array.Fill(redPlane, 1f);
+        var zero = new float[w * h];
+        var fRed = retinaA.Process(luma, w, h, redPlane, zero, zero);
+
+        var retinaB = new Retina(grid: 2, motion: false, color: true);
+        var greenPlane = new float[w * h]; Array.Fill(greenPlane, 1f);
+        var fGreen = retinaB.Process(luma, w, h, zero, greenPlane, zero);
+
+        // Brightness block (first 4 cells) is identical...
+        for (var c = 0; c < 4; c++) Assert.Equal(fRed[c], fGreen[c], 3);
+        // ...but the feature vectors as a whole differ (the colour blocks diverge).
+        Assert.True(Distance(fRed, fGreen) > 0.5f, "colour must separate the two frames");
+    }
+
+    private static float Distance(float[] a, float[] b)
+    {
+        var d = 0f;
+        for (var i = 0; i < a.Length; i++) { var e = a[i] - b[i]; d += e * e; }
+        return MathF.Sqrt(d);
     }
 }
