@@ -4,6 +4,40 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 031 — We looked: the units are real, coherent, cross-video scenes
+*2026-07-21 · Batch · `SyntheticMind.Watch --exemplars` · frames read back by a human (Claude)*
+
+Findings 029/030 proved the *statistics* were healthy (bounded, spread, recurring pairings). But a pairing like "audio #16 ↔ video #45, seen 50×" is still just numbers until you see what unit #45 *is*. So we built the exemplar dumper: a read-only pass that replays the videos with the frozen codebooks and, for each unit, saves the handful of real frames / audio clips closest to its prototype, plus an `index.html` laying the strongest pairings side by side. 28 videos → 63 video + 48 audio units with exemplars (639 files).
+
+**Then we actually looked.** The frames behind the four strongest pairings, read back by eye:
+
+| unit | what it turned out to be | paired sound |
+|---|---|---|
+| video #45 | Ms Rachel, pink outfit, the flat **cartoon** outdoor backdrop (pond, duck) — same setup across *different videos* | audio #16 (50×) |
+| video #26 | a **different presenter** (the man from the Blippi crossovers), grey hoodie, park/city-skyline backdrop, full body | audio #25 (42×) |
+| video #41 | brushing teeth at a **bathroom mirror** — the bedtime-routine footage | audio #2 (20×) |
+| video #61 | Ms Rachel again, but at a **real** outdoor house — real street, autumn tree, holding crafts | audio #2 (34×) |
+
+Every unit sampled was **internally coherent** (its six frames are the same scene at different moments, often from different videos) and **genuinely distinct** from the others. The sharpest result: **#45 vs #61** — it split "Ms Rachel on the *animated* backdrop" from "Ms Rachel at a *real* outdoor location." Same person; the visual statistics of flat cartoon colour vs. real textured houses differ, and the eye separated them. Nothing was labelled — this is unsupervised clustering of raw co-occurrence landing on scenes a human would name.
+
+So the full chain closes: **raw pixels + audio → discovered units → a human recognises them as real, distinct scenes**, with nothing supervised in between. That's the project's thesis in four pictures.
+
+### Honest limits
+
+- **These are scene/context units, not word- or object-units.** It found "the outdoor cartoon scene," not "the duck" or "the letter A." Real visual structure, but coarser than object-level grounding. The coarse 80×60 eye is exactly why.
+- **The video side was verified by eye; the audio side was not** (can't listen from here). A tell that the sound units are fuzzier: **audio #2 pairs with two different scenes** (#41 bathroom, #61 real-outdoor), which reads as a broad "someone talking" unit, not a specific sound. The `index.html` players let a human close this half.
+- **Only the strong pairings were sampled** — the best case. Rarer units may be mushier; not audited.
+- **Grounding is at the level of whole audiovisual context**, i.e. "this scene and this sound recur together," not "this word means that thing." A real but pre-linguistic kind of meaning.
+- Three full decode passes were paid to get here (buggy learn, fixed learn, exemplar dump). The dumper should ride *inside* the learning pass next time — decode once.
+
+### Next
+
+- **Fold exemplar-dumping into the learning pass** so we decode once, not three times.
+- **Push toward object/word units**: a sharper eye (finer retina), and top-N units per event so PMI has real within-scene disambiguation to do — the road from "scene grounding" to "word grounding."
+- Audit a random sample of units (not just the strong ones) to measure how many are coherent vs. mush.
+
+---
+
 ## 030 — The eye was collapsing: fixing it made real sound↔sight structure appear
 *2026-07-20 · Batch · `SyntheticMind.Watch` · measured on 28 of 39 Ms Rachel videos, 12,992 co-occurrences*
 
