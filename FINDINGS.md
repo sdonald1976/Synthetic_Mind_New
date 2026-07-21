@@ -4,6 +4,31 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 033 — Frame-skip: a real 25%, and an honest lesson about where the time goes
+*2026-07-21 · Batch · `SyntheticMind.Watch --stride N` · measured A/B/C on one clip*
+
+Finding 032's colour run took 3.5 hours, and the obvious waste was decoding 216k frames of one video to catch ~500 sparse events. Frame-skip: fully `Read` + process only every Nth frame, cheaply `Grab` the rest. Expected ~3×. **Measured on the smallest clip (55,724 frames, 31 min audio):**
+
+| stride | wall | frames processed | events | audio surprise |
+|---|---|---|---|---|
+| 1 | 281 s | 55,724 | 221 | 0.616 → 0.585 |
+| 3 | 211 s (**−25%**) | 18,575 | 260 | 0.616 → 0.585 |
+| 5 | 199 s (−29%) | 11,145 | 225 | 0.616 → 0.585 |
+
+**Quality holds** — audio surprise identical, event counts comparable, unit counts close (55/51/46). But the speedup is only ~25%, and the numbers say exactly why: processing ⅓ the frames saved ¼ the time, so the per-frame *vision* work (resize, colour deinterleave, 1296-feature retina, predictor) is just ~36% of wall time. The other ~64% is **fixed cost frame-skip can't touch**:
+- **The H.264 decode still happens on skipped frames.** `Grab` advances by decoding into the codec's buffer; it only skips the `Retrieve`/colour-convert. Truly skipping decode needs keyframe seeking — unreliable at small strides, so not worth it.
+- **Audio is never skipped** — every 10 ms hop up to the last processed frame still runs the cochlea + predictor, by design (audio drives half the events).
+- ffmpeg audio extraction per video is fixed too.
+
+So the honest lesson: the bottleneck was never the thing that looked wasteful (per-frame vision) — it's decode + audio, both fixed. Frame-skip banks a free, quality-preserving 25% and is kept (default stride 3; `--stride 1` for a high-fidelity final run), but the big-multiplier speedup isn't here without deeper (riskier) surgery.
+
+### Next
+
+- Leave runtime here — 25% for free, no quality cost, and the remaining bottleneck (decode) isn't worth the reliability risk. **On to the mouth.**
+- If runtime ever really bites: per-video parallelism (independent decode) is the bigger lever than frame-skip, but it complicates the sequential shared-state learning.
+
+---
+
 ## 032 — A sharper, colour eye: finer in places, still lumping in others
 *2026-07-21 · Batch · `SyntheticMind.Watch` · colour retina, re-run on the same corpus*
 

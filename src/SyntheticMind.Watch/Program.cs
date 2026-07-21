@@ -32,6 +32,13 @@ var exemplarDir = dumpExemplars && exFlag + 1 < argList.Count && !argList[exFlag
     ? Path.GetFullPath(argList[exFlag + 1])
     : Path.GetFullPath("exemplars");
 
+// Frame-skip (finding 033): events are sparse and video has ~30 fps, so decoding+processing every
+// frame is waste. Grab (cheap advance, no decode/convert) the skipped frames; fully Read+process
+// only every Nth. At 30 fps a stride of 3 still samples ~10x/sec — far denser than the 400 ms event
+// cooldown needs. Tune with --stride N (1 = every frame).
+var strideFlag = argList.IndexOf("--stride");
+var frameStride = strideFlag >= 0 && strideFlag + 1 < argList.Count && int.TryParse(argList[strideFlag + 1], out var st) && st >= 1 ? st : 3;
+
 var folder = argList.Count > 0 && !argList[0].StartsWith("--") ? argList[0] : Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "testvideo");
 folder = Path.GetFullPath(folder);
 var extensions = new[] { ".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v" };
@@ -39,7 +46,7 @@ var videos = Directory.Exists(folder)
     ? Directory.GetFiles(folder).Where(f => extensions.Contains(Path.GetExtension(f).ToLowerInvariant())).OrderBy(f => f).ToArray()
     : [];
 
-Console.WriteLine($"\n  SyntheticMind — watching {videos.Length} video(s) in {folder}{(dumpExemplars ? " (+ dumping exemplars)" : "")}\n");
+Console.WriteLine($"\n  SyntheticMind — watching {videos.Length} video(s) in {folder}{(dumpExemplars ? " (+ dumping exemplars)" : "")} (every {frameStride}{(frameStride == 1 ? "st" : "rd")} frame)\n");
 if (videos.Length == 0) { Console.WriteLine("  no videos found. pass a folder: dotnet run -- <folder>\n"); return; }
 
 // Shared pipelines — they keep learning across the whole folder, not per file. Colour retina.
@@ -123,12 +130,20 @@ foreach (var video in videos)
     var blue = new float[CamW * CamH];
     var bgr = new byte[CamW * CamH * 3];
 
-    int frames = 0, hopsDone = 0, bindsThisVideo = 0;
+    int frames = 0, hopsDone = 0, bindsThisVideo = 0, frameIndex = 0;
     float earlyAudio = 0, lateAudio = 0; int earlyN = 0, lateN = 0;
     var lastBindMs = -1000.0;
 
-    while (cap.Read(frame) && !frame.Empty())
+    while (true)
     {
+        // Only fully decode (Read) every Nth frame; cheaply advance (Grab) the rest. Audio is never
+        // skipped — the inner loop below catches every hop up to each processed frame's timestamp.
+        var process = frameIndex % frameStride == 0;
+        var ok = process ? cap.Read(frame) : cap.Grab();
+        if (!ok || (process && frame.Empty())) break;
+        frameIndex++;
+        if (!process) continue;
+
         var tMs = cap.Get(VideoCaptureProperties.PosMsec);
 
         // Catch the audio up to this video frame's time.
