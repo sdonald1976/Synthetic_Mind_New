@@ -4,6 +4,30 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 045 — Integration: object→word graduates into the mind — its whole grain changes
+*2026-07-22 · `SyntheticMind` · two front-ends promoted at once*
+
+The second, bigger promotion: **person-centred attention (039) and word segmentation (037)** into the living mind, together — because they only make sense as a pair. This changed the mind's entire *character*, not just a component. Before, it summarised the whole frame and bound scene→sound. Now it does what a child does:
+
+- **Attends** to the person, glancing at what they hold up (person-centred attention) → an *object*-unit, not a scene.
+- **Hears words**, cut from continuous speech at the pauses (`WordSegmenter`) → a *word*-unit, not an audio blob.
+- **Binds** the word to the object it was attending to when the word landed.
+- **Says the word** for a recognised object, as a remembered trajectory.
+
+Its stream of consciousness went from *"sees sight #6 → speaks its sound"* to *"sees object #7 → remembers its word (bound 17×) → says it"*. Verified live: it woke, babbled, then attended/heard-words/bound (666 bindings, 8 words / 64 objects) and said words for recognised objects (25 utterances) autonomously, memory persisting.
+
+### Honest limits (inherited, as promotion always does)
+
+- **Same coarse fidelity as the benches.** Most objects still recall one of a couple of *common* words (word #1 bound to 48 objects) — the presenter-talking words, the see→say-generic pattern again. Only a few pairings are specific.
+- **Few word-units** (8 formed from 444 heard) — the segmenter's word summaries cluster tightly at this resolution; it hears "words" but can't tell many of them apart. A resolution limit, not a mechanism gap.
+- Object-units are salient windows, not segmented objects; words are energy-segmented, not phonemic. All the front-end coarseness rides along.
+
+### Graduation board
+
+Promoted: trajectory mouth (044), person-centred attention + word segmentation (this). The mind now runs the **object→word loop** end to end in one process. Pending: **top-down feedback** (027), and a **`--live`** mic+webcam mode (so it perceives the real room instead of a video folder). Each still proven-alone; the combination holds so far.
+
+---
+
 ## 044 — Integration: the trajectory mouth graduates into the living mind
 *2026-07-22 · `SyntheticMind` · the first bench capability promoted into the always-on loop*
 
