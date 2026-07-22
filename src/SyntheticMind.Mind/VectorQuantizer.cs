@@ -55,6 +55,10 @@ public sealed class VectorQuantizer
     /// <summary>How many vectors have been assigned to a given unit.</summary>
     public int CountOf(int unit) => _counts[unit];
 
+    /// <summary>A copy of a unit's prototype vector — what that unit "looks/sounds like" on average.
+    /// The mind uses it to recall the sound of a recognised sight and speak it.</summary>
+    public float[] Prototype(int unit) => (float[])_prototypes[unit].Clone();
+
     /// <summary>Map a vector to a unit id, learning online. Mints a new unit only if the vector is
     /// far from every prototype AND there is still room; otherwise merges into the nearest.</summary>
     public int Quantize(float[] v)

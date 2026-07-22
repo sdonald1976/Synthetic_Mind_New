@@ -25,3 +25,6 @@ temp/
 name-object-codebook.json
 name-word-codebook.json
 name-pairings.json
+
+# The mind's living memory + utterances (derived from copyrighted video) — local only.
+mind-state/
