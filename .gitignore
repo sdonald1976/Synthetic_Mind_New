@@ -20,3 +20,8 @@ exemplars-ow/
 
 # Trimmed-out downloaded videos moved here — copyrighted, local only, never committed.
 temp/
+
+# object-word learned state (derived from copyrighted video) — local only.
+name-object-codebook.json
+name-word-codebook.json
+name-pairings.json
