@@ -4,6 +4,21 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 044 — Integration: the trajectory mouth graduates into the living mind
+*2026-07-22 · `SyntheticMind` · the first bench capability promoted into the always-on loop*
+
+A different kind of finding: not a new experiment, but the start of the workflow the project now runs on — **prove a capability on its own bench program, then fold it into the single always-on mind** (`SyntheticMind`, the one executable with a heartbeat). First promotion: the syllable-**trajectory** mouth (041), which had lived only in `Voice`.
+
+Wiring it in forced a real addition, not just a swap: to speak a *trajectory* the mind must remember what each sound is like *over time*, not just a static average. So the mind gained a **sound memory** — at each bind it stores the mel-trajectory it just heard, keyed by the sound-unit — and when it recognises a sight, it recalls that trajectory and reproduces it. Its log changed from "knows its sound → speaks" to "**remembers its sound → speaks it**", and the utterances are now time-varying, not held tones.
+
+Verified live: it woke, babbled 600 trajectories, then perceived/learned/bound and spoke trajectory-utterances autonomously (13 in ~110 s), memory persisting. Same coarse fidelity as 041 — promotion inherits quality, it doesn't upgrade it — but the mind now speaks the way the bench proved it could.
+
+### The pattern this establishes
+
+The mind holds the *core loop*; each proven bench capability is a "graduate it in" task. Done: trajectory mouth. Pending: person-centred attention + word segmentation (upgrade the grain from scene→sound to object→word), top-down feedback (027), and a `--live` mic+webcam mode. Each is proven alone; the only real work left is wiring + checking the combination holds in one heartbeat.
+
+---
+
 ## 043 — The capstone: see an object → recall its word → say it
 *2026-07-22 · `SyntheticMind.NameSay` · the whole project as one loop*
 

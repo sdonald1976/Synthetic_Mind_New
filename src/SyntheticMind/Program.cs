@@ -45,11 +45,35 @@ if (videoVq.Count > 0 && videoVq.Dimension != visualWidth)   // retina changed s
 { audioVq = new VectorQuantizer(48, 0.20f); videoVq = new VectorQuantizer(64, 0.30f, subtractRunningMean: true); }
 var binder = CrossSituationalBinder.LoadOrNew(pairingsPath);
 
-// The mouth: it learns to speak by babbling before it ever opens its eyes.
+// The mouth: it learns to speak by babbling before it ever opens its eyes. It speaks in TRAJECTORIES
+// (finding 041 promoted into the mind) — a syllable is a path through control space — and the mind
+// remembers what each sound is like OVER TIME, so it reproduces a time-varying utterance, not a tone.
+const int TrajKeys = 3, TrajFrames = 8, SaySamples = 3600;
 var synth = new FormantSynth(SampleRate);
-var mouth = new VocalBabbler(synth.ControlCount, MelBands, c => MelOf(synth.Synthesize(c, 3600)), seed: 1, normalizeMel: true);
+float[][] ToKeys(float[] c)
+{
+    var keys = new float[TrajKeys][];
+    for (var k = 0; k < TrajKeys; k++) { keys[k] = new float[synth.ControlCount]; Array.Copy(c, k * synth.ControlCount, keys[k], 0, synth.ControlCount); }
+    return keys;
+}
+float[] MelTrajectory(float[] wave)
+{
+    var traj = new float[TrajFrames * MelBands];
+    for (var f = 0; f < TrajFrames; f++)
+    {
+        var s = Math.Clamp((int)((f + 0.5f) / TrajFrames * wave.Length) - 256, 0, Math.Max(0, wave.Length - 512));
+        var frame = new float[512];
+        Array.Copy(wave, s, frame, 0, Math.Min(512, wave.Length - s));
+        var mel = cochlea.Process(frame);
+        Array.Copy(mel, 0, traj, f * MelBands, MelBands);
+    }
+    return traj;
+}
+var mouth = new VocalBabbler(TrajKeys * synth.ControlCount, TrajFrames * MelBands,
+    c => MelTrajectory(synth.SynthesizeTrajectory(ToKeys(c), SaySamples)), seed: 1, normalizeMel: true);
+var soundMemory = new Dictionary<int, float[]>();   // audio-unit → the mel-trajectory it last heard for it
 Console.WriteLine("\n  SyntheticMind — waking up. babbling to learn its own voice...");
-for (var i = 0; i < 400; i++) mouth.Babble();
+for (var i = 0; i < 600; i++) mouth.Babble();
 
 // --- graceful shutdown: on Ctrl-C, finish the thought and remember ----------------------------
 var alive = true;
@@ -139,16 +163,20 @@ while (alive)
                 var vu = videoVq.Quantize(feat);
                 binder.Observe([au], [vu]);
 
-                // Recognise & speak: if this sight has a sound bound to it, say that sound — see→say,
-                // live, inside the loop. Rate-limited so it doesn't babble over itself.
+                // Remember what this sound is like OVER TIME (the last ~0.2s), keyed by its unit.
+                var wStart = Math.Max(0, samplePos - SaySamples);
+                if (samplePos - wStart >= 512) soundMemory[au] = MelTrajectory(samples[wStart..samplePos]);
+
+                // Recognise & speak: if this sight has a sound bound to it, and it remembers what that
+                // sound is like, say it — as a trajectory. see→say, live, inside the loop. Rate-limited.
                 if (tick - lastSpeakTick > 300)
                 {
                     var recalled = binder.HeardForSeen(vu, minJointCount: 4);
-                    if (recalled is { } r && r.Heard < audioVq.Count)
+                    if (recalled is { } r && soundMemory.TryGetValue(r.Heard, out var target))
                     {
-                        var (control, _, _) = mouth.Imitate(audioVq.Prototype(r.Heard));
-                        WavWriter.WriteMono(Path.Combine(saidDir, $"utt{spoken:D4}.wav"), synth.Synthesize(control, 3600), SampleRate);
-                        Console.WriteLine($"  [tick {tick,7}] sees sight #{vu} — knows its sound (#{r.Heard}, bound {r.JointCount}x) — speaks → said/utt{spoken:D4}.wav");
+                        var (control, _, _) = mouth.Imitate(target, refineSteps: 80);
+                        WavWriter.WriteMono(Path.Combine(saidDir, $"utt{spoken:D4}.wav"), synth.SynthesizeTrajectory(ToKeys(control), SaySamples), SampleRate);
+                        Console.WriteLine($"  [tick {tick,7}] sees sight #{vu} — remembers its sound (#{r.Heard}, bound {r.JointCount}x) — speaks it → said/utt{spoken:D4}.wav");
                         lastSpeakTick = tick; spoken++;
                     }
                 }
@@ -167,20 +195,6 @@ while (alive)
 
 Remember();
 Console.WriteLine($"  asleep. lived {tick} moments, learned {audioVq.Count} sounds + {videoVq.Count} sights, spoke {spoken}x. memory in {stateDir}\\\n");
-
-// --- the ear's summary of a produced/heard sound ----------------------------------------------
-float[] MelOf(float[] wave)
-{
-    var acc = new float[MelBands]; var n = 0;
-    for (var p = 0; p + 512 <= wave.Length; p += Hop)
-    {
-        var mel = cochlea.Process(wave[p..(p + 512)]);
-        for (var i = 0; i < MelBands; i++) acc[i] += mel[i];
-        n++;
-    }
-    if (n > 0) for (var i = 0; i < MelBands; i++) acc[i] /= n;
-    return acc;
-}
 
 static float[] ExtractAudio(string video, int rate)
 {
