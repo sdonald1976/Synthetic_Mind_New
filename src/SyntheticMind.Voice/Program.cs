@@ -49,6 +49,9 @@ if (sayIdx >= 0)
     return;
 }
 
+// SYLLABLE MODE: produce a sound that CHANGES over time (a trajectory), not a held tone.
+if (Array.IndexOf(args, "--syllable") >= 0) { RunSyllable(); return; }
+
 Console.WriteLine("\n  SyntheticMind — learning to speak by babbling\n");
 
 // --- 1. Babble: try random controls, hear the result, learn the forward model -------------------
@@ -111,6 +114,71 @@ if (File.Exists(jfk))
 }
 
 Console.WriteLine($"\n  done. listen in {outDir}\\  (babble*, target*/imitation*, real-target/real-imitation)\n");
+
+// Temporal production: a syllable is a TRAJECTORY. Controls become a sequence of keyframes, and the
+// target/heard sound becomes a mel SEQUENCE (the sound over time). Same babble→imitate loop, now in
+// trajectory space — the vowels (034), consonants (040) and grounded targets combine into a syllable.
+void RunSyllable()
+{
+    const int K = 3, N = 8;                       // 3 control keyframes; 8 mel frames across the sound
+    var controlDim = K * synth.ControlCount;
+    var melDim = N * MelBands;
+
+    float[][] ToKeys(float[] control)
+    {
+        var keys = new float[K][];
+        for (var k = 0; k < K; k++) { keys[k] = new float[synth.ControlCount]; Array.Copy(control, k * synth.ControlCount, keys[k], 0, synth.ControlCount); }
+        return keys;
+    }
+    float[] MelTrajectory(float[] wave)
+    {
+        var traj = new float[N * MelBands];
+        for (var f = 0; f < N; f++)
+        {
+            var s = Math.Clamp((int)((f + 0.5f) / N * wave.Length) - FftSize / 2, 0, Math.Max(0, wave.Length - FftSize));
+            var frame = new float[FftSize];
+            Array.Copy(wave, s, frame, 0, Math.Min(FftSize, wave.Length - s));
+            var mel = cochlea.Process(frame);
+            Array.Copy(mel, 0, traj, f * MelBands, MelBands);
+        }
+        return traj;
+    }
+    float[] HearTraj(float[] control) => MelTrajectory(synth.SynthesizeTrajectory(ToKeys(control), ClipSamples));
+
+    Console.WriteLine("\n  SyntheticMind — learning to say a SYLLABLE (a sound that changes over time)\n");
+    var babbler = new VocalBabbler(controlDim, melDim, HearTraj, seed: 1, normalizeMel: true);
+    float e0 = 0, e1 = 0; int n0 = 0, n1 = 0;
+    for (var i = 0; i < 800; i++) { var e = babbler.Babble(); if (i < 160) { e0 += e; n0++; } else if (i >= 640) { e1 += e; n1++; } }
+    Console.WriteLine($"  babbled 800 syllable-trajectories. forward-model error: {e0 / n0:F3} -> {e1 / n1:F3}\n");
+
+    var rng = new Random(7);
+    for (var i = 0; i < 3; i++)
+    {
+        var c = new float[controlDim];
+        for (var j = 0; j < c.Length; j++) c[j] = (float)rng.NextDouble();
+        WavWriter.WriteMono(Path.Combine(outDir, $"syllable-babble{i}.wav"), synth.SynthesizeTrajectory(ToKeys(c), ClipSamples), SampleRate);
+    }
+
+    // Imitate a REAL syllable (a slice of speech) — reproduce its whole trajectory, not a frozen average.
+    var jfk = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "testaudio", "jfk.wav"));
+    if (File.Exists(jfk))
+    {
+        var samples = WavReader.ReadMono(jfk, SampleRate);
+        var start = Math.Min(samples.Length - ClipSamples, (int)(1.1 * SampleRate));
+        if (start > 0)
+        {
+            var window = samples[start..(start + ClipSamples)];
+            var target = MelTrajectory(window);
+            var (control, _, dist) = babbler.Imitate(target, refineSteps: 120);
+            var chance = babbler.ChanceDistance(target);
+            Console.WriteLine("  imitating a real spoken syllable's trajectory:");
+            Console.WriteLine($"    distance {dist:F3}  vs chance {chance:F3}  ({100 * (1 - dist / chance):F0}% closer)");
+            WavWriter.WriteMono(Path.Combine(outDir, "syllable-target.wav"), window, SampleRate);
+            WavWriter.WriteMono(Path.Combine(outDir, "syllable-said.wav"), synth.SynthesizeTrajectory(ToKeys(control), ClipSamples), SampleRate);
+        }
+    }
+    Console.WriteLine($"\n  done. listen in {outDir}\\  (syllable-babble*, syllable-target/said)\n");
+}
 
 // The bridge: babble, then try to reproduce each discovered sound-unit with its own vocal tract.
 void RunBridge(string clipsDir)

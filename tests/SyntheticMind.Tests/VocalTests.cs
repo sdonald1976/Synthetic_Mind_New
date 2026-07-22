@@ -67,6 +67,26 @@ public class VocalTests
     }
 
     [Fact]
+    public void A_trajectory_changes_over_time_a_held_sound_does_not()
+    {
+        var synth = new FormantSynth(SR);
+        var cochlea = new Cochlea(SR, Fft, Mel);
+
+        // A syllable that sweeps noise → vowel (voicing 0 → 1): the spectrum must CHANGE across it —
+        // early noisy/high, late harmonic/low. That change over time is what a syllable is (finding 041).
+        var syllable = synth.SynthesizeTrajectory([[0.3f, 0.5f, 0.7f, 0f], [0.3f, 0.5f, 0.7f, 1f]], 6000);
+        var early = MelOf(cochlea, syllable[..2048]);
+        var late = MelOf(cochlea, syllable[^2048..]);
+        var syllableChange = Dist(early, late);
+        Assert.True(syllableChange > 1.0f, $"a noise→vowel syllable should change over time, got {syllableChange:F2}");
+
+        // A held sound (identical keyframes) should change far less.
+        var held = synth.SynthesizeTrajectory([[0.3f, 0.5f, 0.7f, 1f], [0.3f, 0.5f, 0.7f, 1f]], 6000);
+        var heldChange = Dist(MelOf(cochlea, held[..2048]), MelOf(cochlea, held[^2048..]));
+        Assert.True(heldChange < syllableChange, $"a held sound ({heldChange:F2}) should change less than a syllable ({syllableChange:F2})");
+    }
+
+    [Fact]
     public void Babbling_lowers_the_forward_model_error()
     {
         var (babbler, _) = NewBabbler(seed: 2);

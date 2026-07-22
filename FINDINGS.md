@@ -4,6 +4,37 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 041 — Syllables: the mouth produces a trajectory, not a held sound
+*2026-07-22 · `SyntheticMind.Voice --syllable` · the mouth becomes word-shaped*
+
+Finding 040 ended on the real ceiling: the mouth made one *held* sound. But a syllable is a **trajectory** — "shh-ah" is noise→vowel, "ba" is burst→vowel — a path through control space *over time*. So: controls become a **sequence of keyframes** (3 × 4 = 12), and the target/heard sound becomes a mel **sequence** (8 frames × 20 = 160), the sound's whole evolution instead of a frozen average. `FormantSynth.SynthesizeTrajectory` renders it block-by-block with continuous harmonic phase and filter state so it glides, not clicks.
+
+The elegant part: **`VocalBabbler` didn't change at all.** It's dimension-agnostic — hand it a 12-dim control space and a 160-dim mel-trajectory "hearing", and the same babble→imitate loop learns to produce trajectories.
+
+```
+  babbled 800 syllable-trajectories. forward-model error: 306 -> 126
+  imitating a real spoken syllable's trajectory: 26% closer than chance
+```
+It reproduces the *shape over time* of a real syllable — noise-then-vowel, a pitch sweep — not a static timbre. The babbled clips audibly glide. This is where the whole audio arc converges: vowels (034), imitation (035), consonants (040) and now time all combine into a sound with syllable structure.
+
+### Honest limits
+
+- **26% is modest**, and lower than the static 34% (040) on purpose: matching a whole 160-dim *trajectory* is a harder target than a static average, and the control space is 4× bigger (12 vs 3) for the hill-climb to search. It's aiming at the right, harder thing.
+- **Coarse trajectory** — 3 keyframes capture gross evolution (noise→vowel), not fine articulation (a real stop consonant is a few-ms burst these keyframes can't place precisely).
+- **Still not an intelligible word.** It's a syllable-*shaped* sound approximating a target's spectral path — "a sound like that", not "sun".
+- Not yet wired to the discovered word-units: the `WordSegmenter` (finding 037) already cuts real word-segments; feeding their mel-trajectories here as targets is the obvious bridge — the mouth trying to say the *words it segmented*.
+
+### The mouth, whole
+
+Across 034/035/040/041 the mouth went: makes a vowel → learns to imitate one → gains consonants → produces a syllable trajectory. It is now, in miniature, a real articulatory apparatus driven entirely by babble-and-listen, no labels. What it can't do is the fine, fast articulation that separates a syllable-shaped sound from an intelligible word — that's a resolution limit of a 3-keyframe / 2-formant tract, not a missing mechanism.
+
+### Next
+
+- **Say the segmented words**: feed `WordSegmenter` outputs as trajectory targets — the audio twin of see→say, at word grain.
+- Or take stock: the perception→action loop is now complete at scene/syllable grain, and the honest frontier is *resolution* (finer eye, finer tract, real segmentation), not new mechanisms.
+
+---
+
 ## 040 — Consonants: a noise source moves the mouth past vowels
 *2026-07-22 · `SyntheticMind.Voice` · the mouth gets a second source*
 

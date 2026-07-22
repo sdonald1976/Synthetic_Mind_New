@@ -72,6 +72,80 @@ public sealed class FormantSynth
         return wave;
     }
 
+    /// <summary>
+    /// Synthesize a TRAJECTORY (finding 041): the controls change over time, sweeping through a
+    /// sequence of keyframes. This is what a syllable IS — "shh-ah" is noise→vowel, "ba" is a
+    /// burst→vowel — a path through (F0, F1, F2, voicing) space, not a held point. Rendered block by
+    /// block with continuous harmonic phase and continuous noise/filter state, so the sound glides
+    /// rather than clicking between frames.
+    /// </summary>
+    public float[] SynthesizeTrajectory(float[][] keyframes, int samples)
+    {
+        if (keyframes.Length == 0) throw new ArgumentException("Need at least one keyframe.", nameof(keyframes));
+        foreach (var k in keyframes)
+            if (k.Length != ControlCount) throw new ArgumentException($"Each keyframe needs {ControlCount} controls.", nameof(keyframes));
+
+        const int Block = 160;
+        var wave = new float[samples];
+        var phase = new float[81];                       // persistent harmonic phases
+        var seed = 12345u;
+        float x1a = 0, x2a = 0, y1a = 0, y2a = 0, x1b = 0, x2b = 0, y1b = 0, y2b = 0;   // persistent biquad state
+
+        for (var start = 0; start < samples; start += Block)
+        {
+            var end = Math.Min(start + Block, samples);
+            var c = InterpKeyframes(keyframes, (start + Block * 0.5f) / samples);
+            var f0 = Lerp(90f, 220f, Clamp01(c[0]));
+            var f1 = Lerp(250f, 900f, Clamp01(c[1]));
+            var f2 = Lerp(700f, 2600f, Clamp01(c[2]));
+            var voicing = Clamp01(c[3]);
+
+            var maxK = Math.Min(80, (int)((_sampleRate / 2f) / f0));
+            var amp = new float[maxK + 1];
+            var inc = new float[maxK + 1];
+            for (var k = 1; k <= maxK; k++) { amp[k] = (1f / k) * (Resonance(k * f0, f1) + 0.8f * Resonance(k * f0, f2)); inc[k] = 2f * MathF.PI * k * f0 / _sampleRate; }
+
+            var (b0a, b2a, a1a, a2a) = BiquadCoeffs(f1, 5f);
+            var (b0b, b2b, a1b, a2b) = BiquadCoeffs(f2, 8f);
+
+            for (var n = start; n < end; n++)
+            {
+                var v = 0f;
+                for (var k = 1; k <= maxK; k++) { v += amp[k] * MathF.Sin(phase[k]); phase[k] += inc[k]; }
+
+                seed = seed * 1664525u + 1013904223u;
+                var noise = ((seed >> 8) & 0xFFFFFF) / 8388608f - 1f;
+                var ya = b0a * noise + b2a * x2a - a1a * y1a - a2a * y2a; x2a = x1a; x1a = noise; y2a = y1a; y1a = ya;
+                var yb = b0b * noise + b2b * x2b - a1b * y1b - a2b * y2b; x2b = x1b; x1b = noise; y2b = y1b; y1b = yb;
+
+                wave[n] = voicing * v + (1f - voicing) * 3f * (ya + yb);
+            }
+        }
+
+        ApplyEnvelope(wave);
+        Normalize(wave, 0.9f);
+        return wave;
+    }
+
+    private static float[] InterpKeyframes(float[][] keyframes, float t)
+    {
+        if (keyframes.Length == 1) return keyframes[0];
+        var pos = Math.Clamp(t, 0f, 1f) * (keyframes.Length - 1);
+        var i = Math.Clamp((int)pos, 0, keyframes.Length - 2);
+        var frac = pos - i;
+        var c = new float[keyframes[0].Length];
+        for (var j = 0; j < c.Length; j++) c[j] = keyframes[i][j] * (1 - frac) + keyframes[i + 1][j] * frac;
+        return c;
+    }
+
+    private (float B0, float B2, float A1, float A2) BiquadCoeffs(float centerHz, float q)
+    {
+        var w0 = 2f * MathF.PI * centerHz / _sampleRate;
+        var alpha = MathF.Sin(w0) / (2f * q);
+        var a0 = 1f + alpha;
+        return (alpha / a0, -alpha / a0, -2f * MathF.Cos(w0) / a0, (1f - alpha) / a0);
+    }
+
     // A 2-pole resonant bandpass (RBJ biquad), run over the noise and ADDED into `output` — one call
     // per formant, so the noise ends up with the same spectral peaks that shape the voiced sound.
     private void Bandpass(float[] input, float[] output, float centerHz, float q)
