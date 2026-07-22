@@ -35,6 +35,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyntheticMind", "src\Synthe
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyntheticMind.Runtime", "src\SyntheticMind.Runtime\SyntheticMind.Runtime.csproj", "{23FA5C1E-1C73-471A-A879-B0083530DDDC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyntheticMind.Tuner", "src\SyntheticMind.Tuner\SyntheticMind.Tuner.csproj", "{32AA797C-A5B1-4FA5-A462-1C68DB072851}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -213,6 +215,18 @@ Global
 		{23FA5C1E-1C73-471A-A879-B0083530DDDC}.Release|x64.Build.0 = Release|Any CPU
 		{23FA5C1E-1C73-471A-A879-B0083530DDDC}.Release|x86.ActiveCfg = Release|Any CPU
 		{23FA5C1E-1C73-471A-A879-B0083530DDDC}.Release|x86.Build.0 = Release|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Debug|x64.Build.0 = Debug|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Debug|x86.Build.0 = Debug|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Release|Any CPU.Build.0 = Release|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Release|x64.ActiveCfg = Release|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Release|x64.Build.0 = Release|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Release|x86.ActiveCfg = Release|Any CPU
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -232,6 +246,7 @@ Global
 		{ECF3A068-C731-4C2E-887B-FDDDCBC0A208} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{85197ED5-6F3C-45EF-8E89-D2A02E747EEC} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{23FA5C1E-1C73-471A-A879-B0083530DDDC} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{32AA797C-A5B1-4FA5-A462-1C68DB072851} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {BC1C740D-8C51-48DB-B68B-6773356882D1}

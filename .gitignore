@@ -28,3 +28,6 @@ name-pairings.json
 
 # The mind's living memory + utterances (derived from copyrighted video) — local only.
 mind-state/
+
+# Tuner URL fetches — copyrighted, local only.
+youtube-tuner/
