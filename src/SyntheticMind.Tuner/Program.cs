@@ -164,7 +164,7 @@ sealed class Tuner : Form
         var w = Math.Max(1, target.Width); var h = Math.Max(1, target.Height);
         var canvas = new Bitmap(w, h);
         using var g = Graphics.FromImage(canvas);
-        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
         g.DrawImage(frame, 0, 0, w, h);
         var sx = w / (float)p.Width; var sy = h / (float)p.Height;
         using var pen = new Pen(Color.Lime, 2);

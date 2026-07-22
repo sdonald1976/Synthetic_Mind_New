@@ -24,6 +24,7 @@ public sealed class MindEngine
 {
     private const int SampleRate = 16000, Hop = 160, Fft = 512, MelBands = 20, CamW = 120, CamH = 90, FrameStride = 3;
     private const int FoveaGrid = 8, Orientations = 4, TrajKeys = 3, TrajFrames = 8, SaySamples = 3600;
+    private const int DispW = 480, DispH = 360;   // preview resolution (the real frame, not the 120×90 the mind sees)
 
     /// <summary>Inner-life narration (what it hears, binds, says). The console prints these.</summary>
     public event Action<string>? Log;
@@ -64,6 +65,9 @@ public sealed class MindEngine
     private readonly float[] _luma = new float[CamW * CamH], _red = new float[CamW * CamH], _green = new float[CamW * CamH], _blue = new float[CamW * CamH];
     private readonly byte[] _bgr = new byte[CamW * CamH * 3];
     private readonly Mat _small = new();
+    private readonly Mat _disp = new();
+    private readonly byte[] _dispBytes = new byte[DispW * DispH * 3];
+    private long _lastEmit;
     private volatile bool _alive = true;
 
     public MindEngine(string stateDir)
@@ -206,7 +210,18 @@ public sealed class MindEngine
         }
         var (objFeat, x0, y0, w, h) = _attention.Attend(_luma, _red, _green, _blue, CamW, CamH);
         _currentObject = _objectVq.Quantize(objFeat);
-        Perceived?.Invoke(new Percept((byte[])_bgr.Clone(), CamW, CamH, x0, y0, w, h, _currentObject));
+
+        // Preview, throttled to ~15 fps: the REAL frame at display size, with the attention window
+        // mapped from the mind's 120×90 space onto it.
+        var now = Environment.TickCount64;
+        if (Perceived is { } handler && now - _lastEmit >= 60)
+        {
+            _lastEmit = now;
+            Cv2.Resize(frame, _disp, new Size(DispW, DispH));
+            Marshal.Copy(_disp.Data, _dispBytes, 0, _dispBytes.Length);
+            handler(new Percept((byte[])_dispBytes.Clone(), DispW, DispH,
+                x0 * DispW / CamW, y0 * DispH / CamH, w * DispW / CamW, h * DispH / CamH, _currentObject));
+        }
     }
 
     private float[] Recent()
