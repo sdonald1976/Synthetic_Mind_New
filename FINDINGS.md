@@ -4,6 +4,35 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 038 — Novelty attention: it finds objects, when there are objects to find
+*2026-07-22 · `SyntheticMind.Name` (novelty attention) · a real improvement, content-dependent*
+
+Finding 037's failure was faces winning the saliency vote. The fix: score regions by **novelty** — difference from a running background that absorbs whatever is usually there. The ever-present presenter fades into the background; a held-up object just appeared, so it pops. `ObjectAttention` gained a novelty mode (per-pixel background EMA + a colour-pop tiebreak).
+
+**On 2 vehicle videos it plainly worked.** The top object-units flipped from *all Ms Rachel's face* (037) to **fire trucks** — three separate units (#42, #34, #27) each an FDNY engine attention isolated on its own, bound to words. Exactly the fix intended.
+
+**On a curated 7 (vehicles + animals + first-words) the result is honest and mixed.** Real objects are genuinely found and bound:
+```
+  word #39 <-> object #14  (a stuffed TOY ANIMAL)   pmi 1.37, 7x
+  + the fire trucks from the vehicle videos
+```
+…but the **top** pairings are still presenter fragments — object #0 (her face/torso, 20×), #47 (her face), #45 (her hand mid-gesture). Because two of the curated videos ("Baby's First Words", "First Words") are **talking-head footage with no objects at all**: novelty attention can't find an object where there is none, so it lands on the only thing that changes — the presenter's face, hands, gestures. Those face-heavy videos flood the co-occurrences and crowd the top of the ranking.
+
+### The honest verdict
+
+- **Novelty attention is a real improvement, not a fix.** It demonstrably finds objects (fire trucks, a toy animal) where saliency found only faces (037). Compare the top of the two findings: 037 = all faces; 038 = faces *and* real objects, with real objects clearly present.
+- **It's content-dependent.** Object→word quality is bounded by how object-dense the footage is. Vehicle videos → objects win. Talking-head "first words" videos → the presenter wins (ironically, the videos literally about words are the worst for it, because visually they're just a face).
+- **So my curation was half-wrong.** I mixed object-dense (vehicles) with talking-head (first-words). A clean object→word result needs object-dense footage *only* — all vehicles, or clips where things are physically held up and named.
+- Still scene-of-attention → sound, not a segmented object outline → a phoneme-clean word. The front-ends are coarse; this is a step, not arrival.
+
+### Next
+
+- **Re-run on object-dense videos only** (the vehicle set) for a clean object→word ranking — the honest way to show it working, rather than diluting it with talking-head footage.
+- Longer term, the real ceiling is the front-ends themselves: proper object segmentation and proper word segmentation. Novelty attention is a good cheap proxy; it is not object segmentation.
+- Then **consonants** — give the mouth a noise source so the "said" side moves from vowel-timbre toward actual words.
+
+---
+
 ## 037 — object → word: the plumbing works, a real hit exists, but faces swamp it
 *2026-07-21 · `SyntheticMind.Name` · the summit — reached partway, honestly*
 
