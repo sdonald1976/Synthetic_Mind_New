@@ -17,3 +17,6 @@ voice-out/
 
 # object-word exemplar dumps (frames/clips from copyrighted video) — local only.
 exemplars-ow/
+
+# Trimmed-out downloaded videos moved here — copyrighted, local only, never committed.
+temp/
