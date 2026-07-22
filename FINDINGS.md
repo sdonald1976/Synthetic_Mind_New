@@ -4,6 +4,31 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 040 — Consonants: a noise source moves the mouth past vowels
+*2026-07-22 · `SyntheticMind.Voice` · the mouth gets a second source*
+
+Findings 034/035 said the mouth was vowels-only — it makes voiced, tonal sounds, so it could gesture at a real voice but not reproduce the consonants in it. The fix is what a real vocal tract has: a **second source**. Fricatives (s, sh, f) are turbulent *noise* shaped by the vocal tract, so `FormantSynth` gains a fourth control — **voicing** (1 = tone/vowel, 0 = noise/fricative, between = breathy) — and a noise generator run through the same formant resonators. Same formants that colour a vowel now colour the noise into an "shh"-like sound. Deterministic (fixed-seed noise), so the babbler's imitation stays reproducible.
+
+**It measurably helped where it should — on real speech:**
+```
+  imitating a real human voice (JFK):  21% closer (vowels only)  ->  34% closer (with noise)
+  forward-model error:                 58->33 (3 controls)       ->  45->19 (4 controls)
+  own-range imitation:                 ~95%                      ->  ~93% (unchanged, as expected)
+```
+The real-voice jump is the point: consonants are exactly what a vowels-only mouth was missing, so being able to make noise closed a third of the remaining gap. Own-vowel imitation is unchanged (it was already near-perfect). Verified: a fricative is spectrally distinct from a vowel at the same formants, and carries more energy up high (noise) than the vowel (harmonic, low).
+
+### Honest limits
+
+- **Mid fricatives only.** The noise is shaped by F1/F2 (≤ 2600 Hz), so it makes "shh"/"fff"-ish sounds, not a high-sibilant "sss" (which needs energy up at 4–8 kHz). A partial consonant inventory.
+- **Still STATIC — this is the real ceiling now.** It makes one *held* sound with a fixed voicing. A word is a *trajectory* — "ba" is a burst-then-vowel, "sun" is noise→vowel→nasal *over time*. It can now make a consonant OR a vowel, but not "s-u-n" as a sequence. Temporal production is the missing piece for actual words, and it's the whole of what's left on the mouth.
+- 34% on a real voice is still modest: a formant buzz + mid-noise is a different instrument from a human, and it's aiming at a static average.
+
+### Next
+
+- **Temporal control**: a *sequence* of control frames — a path through (F0, F1, F2, voicing) space — so it produces a syllable's trajectory instead of a held sound. That is the last step from "makes speech-like sounds" toward "says a syllable/word", and it's where the vowel work (034), the consonant work (040), and the grounded targets (035) finally combine into something word-shaped.
+
+---
+
 ## 039 — Person-centred attention: learn the object through the teacher, not around them
 *2026-07-22 · `SyntheticMind.Name` · the reframe that worked*
 

@@ -65,12 +65,11 @@ Console.WriteLine($"  babbled {Babbles}x. forward-model error (predicting its ow
 Console.WriteLine("  (it's learning what its own mouth does — error falls as the map firms up)\n");
 
 // Save a few babbles so you can hear the "voice".
+float[] RandControls(Random r) { var c = new float[synth.ControlCount]; for (var i = 0; i < c.Length; i++) c[i] = (float)r.NextDouble(); return c; }
+
 var demo = new Random(7);
 for (var i = 0; i < 3; i++)
-{
-    var c = new[] { (float)demo.NextDouble(), (float)demo.NextDouble(), (float)demo.NextDouble() };
-    WavWriter.WriteMono(Path.Combine(outDir, $"babble{i}.wav"), synth.Synthesize(c, ClipSamples), SampleRate);
-}
+    WavWriter.WriteMono(Path.Combine(outDir, $"babble{i}.wav"), synth.Synthesize(RandControls(demo), ClipSamples), SampleRate);
 
 // --- 2. Imitate its OWN kind of sound (a held-out random target — a solution provably exists) ----
 Console.WriteLine("  imitating held-out target sounds (its own vocal range):");
@@ -78,7 +77,7 @@ var teacher = new Random(99);
 float totalImit = 0, totalChance = 0;
 for (var t = 0; t < 4; t++)
 {
-    var targetControl = new[] { (float)teacher.NextDouble(), (float)teacher.NextDouble(), (float)teacher.NextDouble() };
+    var targetControl = RandControls(teacher);
     var targetMel = Hear(targetControl);
     var (control, _, dist) = babbler.Imitate(targetMel);
     var chance = babbler.ChanceDistance(targetMel);

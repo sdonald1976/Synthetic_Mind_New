@@ -40,13 +40,30 @@ public class VocalTests
         var synth = new FormantSynth(SR);
         var cochlea = new Cochlea(SR, Fft, Mel);
 
-        // Two very different formant settings (an "ee"-ish vs an "aw"-ish region of the vowel space).
-        var a = MelOf(cochlea, synth.Synthesize([0.3f, 0.1f, 0.9f], Clip));
-        var b = MelOf(cochlea, synth.Synthesize([0.3f, 0.9f, 0.1f], Clip));
-        var same = MelOf(cochlea, synth.Synthesize([0.3f, 0.1f, 0.9f], Clip));
+        // Two very different formant settings (an "ee"-ish vs an "aw"-ish region), both fully voiced.
+        var a = MelOf(cochlea, synth.Synthesize([0.3f, 0.1f, 0.9f, 1f], Clip));
+        var b = MelOf(cochlea, synth.Synthesize([0.3f, 0.9f, 0.1f, 1f], Clip));
+        var same = MelOf(cochlea, synth.Synthesize([0.3f, 0.1f, 0.9f, 1f], Clip));
 
-        Assert.Equal(0f, Dist(a, same), 3);                     // deterministic
+        Assert.Equal(0f, Dist(a, same), 3);                     // deterministic (noise is fixed-seed)
         Assert.True(Dist(a, b) > 2f, $"different formants should sound different, got {Dist(a, b):F2}");
+    }
+
+    [Fact]
+    public void Voicing_makes_a_consonant_distinct_from_a_vowel()
+    {
+        var synth = new FormantSynth(SR);
+        var cochlea = new Cochlea(SR, Fft, Mel);
+
+        // Same formants, opposite voicing: a voiced vowel vs an unvoiced fricative (noise). They must
+        // sound clearly different — that difference is the whole point of a noise source (finding 040).
+        var vowel = MelOf(cochlea, synth.Synthesize([0.3f, 0.5f, 0.7f, 1f], Clip));   // voiced
+        var fric = MelOf(cochlea, synth.Synthesize([0.3f, 0.5f, 0.7f, 0f], Clip));    // pure noise
+        Assert.True(Dist(vowel, fric) > 1.5f, $"a fricative should differ from a vowel, got {Dist(vowel, fric):F2}");
+
+        // And the fricative should carry more of its energy up high (noise) than the vowel (harmonic, low).
+        float HighFrac(float[] m) { float hi = 0, all = 1e-6f; for (var i = 0; i < m.Length; i++) { all += m[i]; if (i >= m.Length / 2) hi += m[i]; } return hi / all; }
+        Assert.True(HighFrac(fric) > HighFrac(vowel), "the fricative should be more high-frequency than the vowel");
     }
 
     [Fact]
@@ -70,7 +87,7 @@ public class VocalTests
         for (var i = 0; i < 400; i++) babbler.Babble();
 
         // A held-out target from the same vocal range — a reproducible solution provably exists.
-        var targetMel = hear([0.4f, 0.7f, 0.3f]);
+        var targetMel = hear([0.4f, 0.7f, 0.3f, 1f]);
         var (_, _, dist) = babbler.Imitate(targetMel);
         var chance = babbler.ChanceDistance(targetMel);
 
