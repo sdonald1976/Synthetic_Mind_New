@@ -4,6 +4,33 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 047 — Top-down doesn't pay rent in the coarse mind — so it stays out
+*2026-07-22 · `SyntheticMind` · a graduation attempt that honestly failed, and why that's the right call*
+
+The last item on the board: promote top-down feedback (027) into the mind. The faithful cross-modal form is "what it SEES should help predict what it HEARS" — feed the attended object as top-down context to the sound prediction. Built it with `NlmsRegressor` (object one-hot → mel) against a no-context baseline, to *measure* the effect rather than assume it.
+
+**It measured negative — decisively.**
+```
+  predicting the raw per-hop sound:     top-down -6% to -9%   (worse than no sight)
+  predicting the smoothed sound-character: top-down -194%     (much worse)
+```
+The sight does not predict the sound in this mind, for two honest reasons: person-centred attention **jitters** (the object changes every glance, so the context is noisy), and the grounding is **coarse and common-word-dominated** (finding 045) — so conditioning on "what I see" adds variance over the plain average, it doesn't remove it. Finding 027's top-down worked because its synthetic stream had a *genuine* long-range dependency for the context to exploit; the mind's coarse cross-modal perception doesn't have one strong enough.
+
+### The decision — the project's own principle, applied
+
+The founding rule (the "why doesn't the second part ever work" conversation, and finding 004): **a rule that doesn't pay rent gets pruned.** Top-down here doesn't pay rent — it costs compute and makes prediction worse — so it does *not* earn a seat in the always-on mind. Reverted. This isn't top-down failing as a mechanism (027 stands); it's the mind being honest that the mechanism has nothing to exploit *yet*, and refusing to carry a passenger.
+
+It graduates the day the grounding is sharp enough that a stable sight genuinely predicts its sound — which is, once again, the **resolution** frontier, not a missing part.
+
+### Graduation board — complete (honestly)
+
+- ✅ trajectory mouth (044) · ✅ object→word: attention + word segmentation (045) · ✅ live perception (046)
+- ⛔ top-down (047) — measured, doesn't pay rent at this resolution, held out on purpose
+
+Everything that pays rent is now in the one living executable. The board is done — not by cramming all five in, but by the mind keeping only what earns its keep.
+
+---
+
 ## 046 — Integration: `--live` — the mind perceives the real room
 *2026-07-22 · `SyntheticMind --live` · off the video files, onto real sensors*
 
