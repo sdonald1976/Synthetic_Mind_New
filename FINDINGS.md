@@ -4,6 +4,24 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 046 — Integration: `--live` — the mind perceives the real room
+*2026-07-22 · `SyntheticMind --live` · off the video files, onto real sensors*
+
+Third promotion: live perception (Perceive's webcam + mic, findings 023–026) into the mind. The refactor that made it clean: both worlds now drive **one shared brain** — `SeeFrame` / `HearBlock` / `MaybeSpeak` — and only the *source* differs. A folder of videos feeds it audio slices synced to frame time; the live room feeds it webcam frames (`VideoCapture(0)`) and mic samples (NAudio `WaveInEvent`, drained each frame). Same object→word loop, same voice, same memory, either way.
+
+Verified on the machine: `--live` opened the webcam and mic, and the mind ran its full heartbeat on real sensors — attended to objects, segmented words, bound, and spoke — persisting memory. File mode still identical (regression-checked: same bindings, same utterances).
+
+### Honest limits
+
+- **Tested on an empty, quiet room** (nobody there) — ear-surprise 0.000, so the "words" were ambient noise and the "objects" a static scene. The *pipeline* is proven live; meaningful live *content* needs a person in front of the camera talking, which is a human-in-the-loop test, not something automatable here.
+- Everything the object→word grain inherits (coarse fovea, few word-units, common-word bias) rides along, unchanged.
+
+### Graduation board — nearly complete
+
+Promoted: trajectory mouth (044), object→word (045), live perception (046). The one executable now runs the full unsupervised loop on either recorded video *or* the real world. **Pending: top-down feedback (027)** — the last bench capability not yet in the mind.
+
+---
+
 ## 045 — Integration: object→word graduates into the mind — its whole grain changes
 *2026-07-22 · `SyntheticMind` · two front-ends promoted at once*
 
