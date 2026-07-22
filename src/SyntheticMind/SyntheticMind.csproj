@@ -1,14 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\SyntheticMind.Mind\SyntheticMind.Mind.csproj" />
-    <ProjectReference Include="..\SyntheticMind.Audio\SyntheticMind.Audio.csproj" />
-    <ProjectReference Include="..\SyntheticMind.Vision\SyntheticMind.Vision.csproj" />
+    <ProjectReference Include="..\SyntheticMind.Runtime\SyntheticMind.Runtime.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="NAudio" Version="2.2.1" />
-    <PackageReference Include="OpenCvSharp4" Version="4.13.0.20260627" />
     <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.13.0.20260627" />
   </ItemGroup>
 
