@@ -4,6 +4,38 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 043 — The capstone: see an object → recall its word → say it
+*2026-07-22 · `SyntheticMind.NameSay` · the whole project as one loop*
+
+Every piece finally wired into one continuous path. Show it an object image and:
+1. **See** — it perceives the object with the same colour fovea + object codebook it learned by watching (person-centred attention, 039).
+2. **Recall** — it looks up the word bound to that object across the corpus, by cross-situational PMI (`HeardForSeen`).
+3. **Say** — it reproduces that word's trajectory with the vocal tract it built by babbling (040/041).
+
+Vision → memory → speech, and **every link learned with no labels.** Ran end to end on the vehicle corpus:
+```
+  saw object  7  →  recalled word 20 (bound 9x, PMI 1.37)  →  said it   ← the fire-hat scene → the fire word
+  saw object 22  →  recalled word  3 (PMI 0.72)            →  said it (31% closer)
+  21 objects perceived and spoken in total.
+```
+Object 7 is the one that shows the whole thesis in a single act: it was shown a fire-hat/fire-truck scene, perceived it, recalled the *fire* word bound to it, and said that word — none of it labelled, ever.
+
+### Honest limits — this is a stack of approximations, and it shows
+
+- **The discriminative recalls are few.** Most objects recalled a *common* word (word 2 bound to 66 objects, word 1 to 40) — the same "the frequent thing wins" pattern as see→say (036). Only a handful (object 7 → the fire word, PMI 1.37) are specific. PMI ranks them correctly, but the tail is generic.
+- **It compounds every coarse approximation** below it: a mixed object-unit (039), a segmented-but-not-clean word (037), a syllable-shaped-not-intelligible reproduction (041). The "said" is a rough echo of a word, not a word. Fidelity at each stage multiplies.
+- **Re-perception is approximate**: the object image is re-run through the fovea at the window size, which won't reproduce the exact video-time features, so the perceived unit can differ from the crop's origin. It still lands on *an* object-unit and recalls *a* word — but the mapping isn't exact.
+
+### What it means
+
+The number that matters here isn't a percentage — it's that the loop **closes**. A machine shown a picture, told nothing, ever, perceives an object, remembers from its own experience what that object is called, and makes that word-sound with a voice it taught itself. Coarse at every step, yes — but whole. 43 findings from "predict the next input" to this, all unsupervised, local, online, no backprop.
+
+### The honest frontier (unchanged, now clearly the whole story)
+
+Nothing left is a missing *mechanism*. What separates this from something you'd call language is **resolution** at every stage: a finer eye (segment the object, not a salient window), a finer ear/tract (a clean word, not a syllable-shape), more data. The architecture does the foundational thing — bootstrap grounded perception-and-production from raw sensation — and it knows exactly where it stops.
+
+---
+
 ## 042 — Say-words: the mouth reproduces the words it cut out of speech
 *2026-07-22 · `SyntheticMind.Voice --say-words` · the perceive→produce loop closes at word grain*
 
