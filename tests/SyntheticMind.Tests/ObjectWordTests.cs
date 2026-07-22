@@ -30,6 +30,38 @@ public class ObjectWordTests
     }
 
     [Fact]
+    public void Novelty_attention_ignores_the_ever_present_thing_and_fires_on_what_appears()
+    {
+        const int w = 120, h = 90;
+        // A "face": a contrasty block always in the CENTRE, plus a NEW object that appears later.
+        var attn = new ObjectAttention(new Retina(grid: 6, motion: false, orientations: 4, color: true), novelty: true);
+        // Establish the background: many frames of just the centre face.
+        for (var t = 0; t < 60; t++)
+        {
+            float[] l = new float[w * h], r = new float[w * h], gg = new float[w * h], bb = new float[w * h];
+            Array.Fill(l, 0.5f); Array.Fill(r, 0.5f); Array.Fill(gg, 0.5f); Array.Fill(bb, 0.5f);
+            for (var y = h / 3; y < 2 * h / 3; y++)
+                for (var x = w / 3; x < 2 * w / 3; x++)
+                { var i = y * w + x; l[i] = 0.9f; r[i] = 0.9f; gg[i] = 0.8f; bb[i] = 0.7f; }
+            attn.Attend(l, r, gg, bb, w, h);
+        }
+        // Now a frame where a new red object appears bottom-right.
+        float[] fl = new float[w * h], fr = new float[w * h], fg = new float[w * h], fb = new float[w * h];
+        Array.Fill(fl, 0.5f); Array.Fill(fr, 0.5f); Array.Fill(fg, 0.5f); Array.Fill(fb, 0.5f);
+        for (var y = h / 3; y < 2 * h / 3; y++)
+            for (var x = w / 3; x < 2 * w / 3; x++)
+            { var i = y * w + x; fl[i] = 0.9f; fr[i] = 0.9f; fg[i] = 0.8f; fb[i] = 0.7f; }
+        for (var y = 3 * h / 4; y < h; y++)
+            for (var x = 3 * w / 4; x < w; x++)
+            { var i = y * w + x; fr[i] = 1f; fg[i] = 0f; fb[i] = 0f; }
+
+        var (_, x0, y0, ww, hh) = attn.Attend(fl, fr, fg, fb, w, h);
+        // Attention should go to the NEW object (bottom-right), not the ever-present centre face.
+        Assert.True(x0 + ww / 2 >= w / 2, $"should attend to the new object on the right, got centre-x {x0 + ww / 2}");
+        Assert.True(y0 + hh / 2 >= h / 2, $"should attend to the new object at the bottom, got centre-y {y0 + hh / 2}");
+    }
+
+    [Fact]
     public void Word_segmenter_cuts_voiced_runs_and_ignores_blips()
     {
         var seg = new WordSegmenter(melBands: 4, minHops: 10, maxHops: 90, hangHops: 5, activateOverFloor: 4f);

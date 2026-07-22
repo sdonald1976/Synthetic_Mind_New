@@ -26,7 +26,7 @@ Console.WriteLine($"\n  SyntheticMind — learning object↔word in {videos.Leng
 if (videos.Length == 0) { Console.WriteLine("  no videos found.\n"); return; }
 
 var cochlea = new Cochlea(SampleRate, Fft, MelBands);
-var attention = new ObjectAttention(new Retina(FoveaGrid, motion: false, orientations: Orientations, color: true));
+var attention = new ObjectAttention(new Retina(FoveaGrid, motion: false, orientations: Orientations, color: true), novelty: true);
 var objectVq = new VectorQuantizer(capacity: 64, newUnitThreshold: 0.30f, subtractRunningMean: true);
 var wordVq = new VectorQuantizer(capacity: 48, newUnitThreshold: 0.20f);
 var binder = new CrossSituationalBinder();
