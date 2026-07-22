@@ -118,7 +118,12 @@ foreach (var (h, s, pmi, joint) in top)
     Console.WriteLine($"    word #{h,-2} <-> object #{s,-2}   pmi {pmi,5:F2}, seen together {joint}x");
 
 WriteExemplars(Path.GetFullPath("exemplars-ow"));
-Console.WriteLine($"\n  exemplars (object crops + word clips) in exemplars-ow\\\n");
+
+// Persist the learned state so the capstone (see object → recall word → say it) can load it.
+objectVq.Save(Path.GetFullPath("name-object-codebook.json"));
+wordVq.Save(Path.GetFullPath("name-word-codebook.json"));
+binder.Save(Path.GetFullPath("name-pairings.json"));
+Console.WriteLine($"\n  exemplars in exemplars-ow\\, learned state in name-*.json\n");
 
 // --- helpers ----------------------------------------------------------------------------------
 byte[] CropJpg(Mat frame, int x0, int y0, int wW, int hH)
