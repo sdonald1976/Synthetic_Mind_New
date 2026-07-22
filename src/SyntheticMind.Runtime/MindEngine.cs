@@ -154,7 +154,7 @@ public sealed class MindEngine
     {
         Log?.Invoke("opening webcam...");
         VideoCapture? cam = null;
-        for (var dev = 0; dev <= 1; dev++)
+        for (var dev = 1; dev <= 2; dev++)
         {
             try { cam?.Dispose(); cam = new VideoCapture(dev); } catch (Exception ex) { Log?.Invoke($"  device {dev}: {ex.Message}"); continue; }
             if (cam.IsOpened()) { Log?.Invoke($"webcam opened (device {dev})."); break; }
