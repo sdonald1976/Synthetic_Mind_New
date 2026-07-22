@@ -34,7 +34,7 @@ public class ObjectWordTests
     {
         const int w = 120, h = 90;
         // A "face": a contrasty block always in the CENTRE, plus a NEW object that appears later.
-        var attn = new ObjectAttention(new Retina(grid: 6, motion: false, orientations: 4, color: true), novelty: true);
+        var attn = new ObjectAttention(new Retina(grid: 6, motion: false, orientations: 4, color: true), mode: AttentionMode.Novelty);
         // Establish the background: many frames of just the centre face.
         for (var t = 0; t < 60; t++)
         {
@@ -59,6 +59,43 @@ public class ObjectWordTests
         // Attention should go to the NEW object (bottom-right), not the ever-present centre face.
         Assert.True(x0 + ww / 2 >= w / 2, $"should attend to the new object on the right, got centre-x {x0 + ww / 2}");
         Assert.True(y0 + hh / 2 >= h / 2, $"should attend to the new object at the bottom, got centre-y {y0 + hh / 2}");
+    }
+
+    [Fact]
+    public void Person_centred_rests_on_the_person_glances_at_a_new_thing_then_returns()
+    {
+        const int w = 120, h = 90;
+        (float[] L, float[] R, float[] G, float[] B) Frame(bool withObject)
+        {
+            float[] l = new float[w * h], r = new float[w * h], g = new float[w * h], b = new float[w * h];
+            Array.Fill(l, 0.5f); Array.Fill(r, 0.5f); Array.Fill(g, 0.5f); Array.Fill(b, 0.5f);
+            for (var y = h / 3; y < 2 * h / 3; y++)                       // the ever-present centre "person"
+                for (var x = w / 3; x < 2 * w / 3; x++)
+                { var i = y * w + x; l[i] = 0.9f; r[i] = 0.9f; g[i] = 0.8f; b[i] = 0.7f; }
+            if (withObject)
+                for (var y = 3 * h / 4; y < h; y++)                       // a thing held up bottom-right
+                    for (var x = 3 * w / 4; x < w; x++)
+                    { var i = y * w + x; r[i] = 1f; g[i] = 0f; b[i] = 0f; l[i] = 0.4f; }
+            return (l, r, g, b);
+        }
+
+        var attn = new ObjectAttention(new Retina(grid: 6, motion: false, orientations: 4, color: true),
+            mode: AttentionMode.PersonCentred, glanceFrames: 6, glanceTrigger: 2.5f);
+
+        for (var t = 0; t < 60; t++) { var f = Frame(false); attn.Attend(f.L, f.R, f.G, f.B, w, h); }   // rest on person
+
+        // The person holds something up → attention glances at it (bottom-right).
+        (int cx, int cy) g1 = (0, 0);
+        for (var t = 0; t < 3; t++) { var f = Frame(true); var a = attn.Attend(f.L, f.R, f.G, f.B, w, h); g1 = (a.X0 + a.W / 2, a.Y0 + a.H / 2); }
+        Assert.True(attn.Glancing, "should be glancing at the held-up thing");
+        Assert.True(g1.cx >= w / 2 && g1.cy >= h / 2, $"glance should be bottom-right, got {g1}");
+
+        // The thing goes away → after the glance elapses, attention returns to the person (centre).
+        (int cx, int cy) last = (0, 0);
+        for (var t = 0; t < 12; t++) { var f = Frame(false); var a = attn.Attend(f.L, f.R, f.G, f.B, w, h); last = (a.X0 + a.W / 2, a.Y0 + a.H / 2); }
+        Assert.False(attn.Glancing, "the glance should have ended");
+        Assert.True(last.cx > w / 4 && last.cx < 3 * w / 4 && last.cy > h / 4 && last.cy < 3 * h / 4,
+            $"attention should be back on the centre person, got {last}");
     }
 
     [Fact]
