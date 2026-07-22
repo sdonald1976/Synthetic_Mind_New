@@ -52,6 +52,16 @@ if (sayIdx >= 0)
 // SYLLABLE MODE: produce a sound that CHANGES over time (a trajectory), not a held tone.
 if (Array.IndexOf(args, "--syllable") >= 0) { RunSyllable(); return; }
 
+// SAY-WORDS: try to say the real words it cut out of speech (WordSegmenter) as trajectories.
+var swIdx = Array.IndexOf(args, "--say-words");
+if (swIdx >= 0)
+{
+    var dir = swIdx + 1 < args.Length && !args[swIdx + 1].StartsWith("--")
+        ? Path.GetFullPath(args[swIdx + 1]) : Path.GetFullPath("exemplars-ow/word");
+    RunSayWords(dir);
+    return;
+}
+
 Console.WriteLine("\n  SyntheticMind — learning to speak by babbling\n");
 
 // --- 1. Babble: try random controls, hear the result, learn the forward model -------------------
@@ -178,6 +188,75 @@ void RunSyllable()
         }
     }
     Console.WriteLine($"\n  done. listen in {outDir}\\  (syllable-babble*, syllable-target/said)\n");
+}
+
+// The last bridge: try to SAY the real segmented words, as syllable trajectories. Perception cut the
+// words out of Ms Rachel's speech (WordSegmenter); the mouth, taught only by babbling, tries to
+// reproduce each one's trajectory. The audio twin of see→say, at word grain.
+void RunSayWords(string wordsDir)
+{
+    if (!Directory.Exists(wordsDir))
+    {
+        Console.WriteLine($"\n  no segmented-word clips at {wordsDir}");
+        Console.WriteLine("  run the object→word learner first:\n    dotnet run --project src/SyntheticMind.Name -- <folder>\n");
+        return;
+    }
+
+    const int K = 3, N = 8;
+    var controlDim = K * synth.ControlCount;
+    var melDim = N * MelBands;
+    float[][] ToKeys(float[] control)
+    {
+        var keys = new float[K][];
+        for (var k = 0; k < K; k++) { keys[k] = new float[synth.ControlCount]; Array.Copy(control, k * synth.ControlCount, keys[k], 0, synth.ControlCount); }
+        return keys;
+    }
+    float[] MelTrajectory(float[] wave)
+    {
+        var traj = new float[N * MelBands];
+        for (var f = 0; f < N; f++)
+        {
+            var s = Math.Clamp((int)((f + 0.5f) / N * wave.Length) - FftSize / 2, 0, Math.Max(0, wave.Length - FftSize));
+            var frame = new float[FftSize];
+            Array.Copy(wave, s, frame, 0, Math.Min(FftSize, wave.Length - s));
+            var mel = cochlea.Process(frame);
+            Array.Copy(mel, 0, traj, f * MelBands, MelBands);
+        }
+        return traj;
+    }
+
+    Console.WriteLine("\n  SyntheticMind — trying to SAY the words it cut out of speech\n");
+    var babbler = new VocalBabbler(controlDim, melDim, c => MelTrajectory(synth.SynthesizeTrajectory(ToKeys(c), ClipSamples)), seed: 1, normalizeMel: true);
+    for (var i = 0; i < 800; i++) babbler.Babble();
+
+    var outWords = Path.Combine(outDir, "say-words");
+    if (Directory.Exists(outWords)) Directory.Delete(outWords, recursive: true);
+    Directory.CreateDirectory(outWords);
+
+    var results = new List<(string Unit, float Closer, float[] Control, string Clip)>();
+    foreach (var unitDir in Directory.GetDirectories(wordsDir).OrderBy(d => d))
+    {
+        var clip = Directory.GetFiles(unitDir, "ex0.wav").FirstOrDefault();
+        if (clip is null) continue;
+        var wave = WavReader.ReadMono(clip, SampleRate);
+        if (wave.Length < FftSize) continue;
+        var target = MelTrajectory(wave);
+        var (control, _, dist) = babbler.Imitate(target, refineSteps: 120);
+        var chance = babbler.ChanceDistance(target);
+        results.Add((Path.GetFileName(unitDir), chance > 1e-6f ? 100f * (1f - dist / chance) : 0f, control, clip));
+    }
+    if (results.Count == 0) { Console.WriteLine("  no usable word clips found.\n"); return; }
+
+    results.Sort((a, b) => b.Closer.CompareTo(a.Closer));
+    Console.WriteLine($"  babbled 800 trajectories, then tried to say {results.Count} segmented words.");
+    Console.WriteLine($"  average {results.Average(r => r.Closer):F0}% closer than chance; best:");
+    foreach (var r in results.Take(6)) Console.WriteLine($"    word {r.Unit}: {r.Closer:F0}% closer");
+    foreach (var r in results.Take(6))
+    {
+        File.Copy(r.Clip, Path.Combine(outWords, $"{r.Unit}-heard.wav"), overwrite: true);
+        WavWriter.WriteMono(Path.Combine(outWords, $"{r.Unit}-said.wav"), synth.SynthesizeTrajectory(ToKeys(r.Control), ClipSamples), SampleRate);
+    }
+    Console.WriteLine($"\n  heard-vs-said pairs in {outWords}\\\n");
 }
 
 // The bridge: babble, then try to reproduce each discovered sound-unit with its own vocal tract.

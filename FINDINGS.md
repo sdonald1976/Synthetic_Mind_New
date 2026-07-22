@@ -4,6 +4,34 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 042 — Say-words: the mouth reproduces the words it cut out of speech
+*2026-07-22 · `SyntheticMind.Voice --say-words` · the perceive→produce loop closes at word grain*
+
+The last bridge. Perception already cuts real words out of continuous speech (`WordSegmenter`, finding 037); the mouth can now produce trajectories (finding 041). So: feed each segmented word-clip in as a mel-**trajectory** target, and the babble-taught mouth tries to say it back — the audio twin of see→say (036), one grain finer.
+
+```
+  babbled 800 trajectories, then tried to say 41 segmented words.
+  average 20% closer than chance; best word u02 56%, u30 38%, u09 32%
+```
+The whole path now runs end to end with no labels anywhere: **hear speech → segment a word → reproduce its trajectory with a vocal tract learned by babbling.** Perception and production, cut and spoken, meeting at the word.
+
+### Honest limits
+
+- **20% average is modest** (best 56%). It reproduces the coarse *shape* of a word — its noise/vowel/pitch path — not the word itself. A syllable-shaped echo, not intelligible speech, and the words it does best are the ones a 3-keyframe / 2-formant tract can approximate.
+- **Reproduction, not naming-through-vision.** This says the words it *heard*; it is not yet "see the object → recall its bound word → say that word". That full chain exists in pieces — object→word pairings (039) and say-a-word (here) — but isn't wired, because `SyntheticMind.Name` prints its pairings rather than persisting them. Wiring it is the true capstone.
+- Same resolution ceiling as 041: coarse tract, coarse trajectory.
+
+### Where the whole thing stands
+
+The perceive→produce loop is now closed in both directions and at two grains: **scene→sound→speak** (see→say) and **hear→segment→reproduce** (say-words), plus the grounding pieces (cross-modal binding, object→word via joint attention). Everything from raw pixels and audio to a spoken echo is unsupervised, local, online, no backprop, no labels — 42 findings of it. What remains is not new mechanism but **resolution** (a finer eye and tract, real segmentation) and **wiring the existing pieces into the one full see→object→recall-word→say chain**.
+
+### Next
+
+- **The true capstone**: persist `Name`'s object→word pairings + word codebook, then chain *see an object → recall its bound word → say it* — vision driving speech at word grain.
+- Otherwise: take stock; the loop is closed, and the frontier is sharpness, not new parts.
+
+---
+
 ## 041 — Syllables: the mouth produces a trajectory, not a held sound
 *2026-07-22 · `SyntheticMind.Voice --syllable` · the mouth becomes word-shaped*
 
