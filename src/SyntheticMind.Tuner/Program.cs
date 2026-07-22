@@ -82,16 +82,17 @@ sealed class Tuner : Form
         _knobs.Text = $"  gap {_cooldown.Value} · support {_support.Value}";
     }
 
+    // Must be called on the UI thread — it reads the knob controls before handing off to the engine thread.
     private void Start(Action driver)
     {
         StopEngine();
         _transcript.Clear();
         var stateDir = Path.GetFullPath("mind-state");
+        var cooldown = _cooldown.Value;   // read UI controls HERE, on the UI thread
+        var support = _support.Value;
         _thread = new Thread(() =>
         {
-            _engine = new MindEngine(stateDir);
-            _engine.SpeakCooldownTicks = _cooldown.Value;
-            _engine.RecallSupport = _support.Value;
+            _engine = new MindEngine(stateDir) { SpeakCooldownTicks = cooldown, RecallSupport = support };
             _engine.Log += Log;
             _engine.Perceived += p => { lock (_gate) { _latest = p; _hasFrame = true; } };
             driver();
@@ -129,7 +130,7 @@ sealed class Tuner : Form
             }
             catch (Exception ex) { Log($"fetch failed: {ex.Message}"); return; }
             Log("fetched. now watching.");
-            Start(() => _engine!.RunWorld(outFolder));
+            if (!IsDisposed) BeginInvoke(() => Start(() => _engine!.RunWorld(outFolder)));   // Start must run on the UI thread
         }) { IsBackground = true }.Start();
     }
 
@@ -148,7 +149,7 @@ sealed class Tuner : Form
     {
         Percept p; bool has;
         lock (_gate) { p = _latest; has = _hasFrame; }
-        if (has) _view.Image = Render(p, _view.ClientSize);
+        if (has) { var old = _view.Image; _view.Image = Render(p, _view.ClientSize); old?.Dispose(); }
         if (_engine is { } e) _counters.Text = $"  {e.WordCount} words · {e.ObjectCount} objects · {e.Bindings} bindings · tick {e.Ticks}";
     }
 
