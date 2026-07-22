@@ -4,6 +4,40 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 039 — Person-centred attention: learn the object through the teacher, not around them
+*2026-07-22 · `SyntheticMind.Name` · the reframe that worked*
+
+The correction (from the user): suppressing the person was the wrong problem. **A child learns by watching the teacher** — the mouth carries the word, the gaze/gesture points to the referent. You get to the object *through* the person (joint attention), not by ignoring them. And the dynamics matter: hold on the person, glance at what they hold up for a second or two, then snap back.
+
+`AttentionMode.PersonCentred` implements exactly that, synthesising the two earlier cues: **saliency** finds the person (the anchor); a **novelty** spike (something appeared — a held-up object) triggers a ~1.5 s glance to it; then attention returns to the person. The unlooked-for bonus: because attention rests on the person, person-units co-occur with *every* word → **PMI discounts them automatically**; objects caught during glances pair with *specific* words → those survive.
+
+**On 3 vehicle videos it produced the best object→word yet.** Top pairing is a real vehicle, and a coherent cluster emerged:
+```
+  word #16 <-> object #43  (a fire truck + ladder)         pmi 2.14
+  word #20 <-> object #53  (an FDNY fire truck)            \
+  word #20 <-> object #7   (Blippi HOLDING UP a fire hat)   } one word, three fire objects
+  word #20 <-> object #37                                  /
+```
+Object #7 is the mechanism visible in one crop: a **glance catching a held-up object** at the moment it's named. A single word (#20) binding consistently to fire-vehicle objects across three separate units — that is object→word, learned the way a child does it.
+
+### Honest limits
+
+- **Not clean.** Some person-in-context units survive PMI — e.g. object #55 is Blippi's face *with a fire hat*, which legitimately recurs with a fire word, so it isn't discounted. The result is a real mix of held-up objects and contextual face-framings, not pure objects.
+- **Needs object-rich footage.** On talking-head video the person is (correctly, now) the whole attention — which is right for a learner, but yields person→word, not object→word. Object→word only appears where the teacher actually shows things.
+- **Still a window crop, not a segmented object.** "Fire truck" here means "the salient window during the fire-truck glance," not an outlined object. Coarse front-end, as ever.
+- Word units unverified by ear (the clips are there to listen to).
+
+### The arc
+
+037 (saliency): top objects **all faces**. 038 (novelty): objects present but presenter-fragments dominate on mixed footage. 039 (person-centred, object-rich): **real vehicles at the top, a coherent word↔fire-objects cluster, a held-up object caught mid-glance.** The fix wasn't a cleverer way to remove the person — it was to stop removing the person and use them as the bridge. The most important step here was a reframe, not code.
+
+### Next
+
+- **Consonants** — give the mouth a noise source so the "said" side moves from vowel-timbre toward actual words (the deferred step).
+- Longer term the ceiling is still real segmentation (object outline, phoneme-clean word); person-centred attention is a good cheap proxy for joint attention, not the real thing.
+
+---
+
 ## 038 — Novelty attention: it finds objects, when there are objects to find
 *2026-07-22 · `SyntheticMind.Name` (novelty attention) · a real improvement, content-dependent*
 
