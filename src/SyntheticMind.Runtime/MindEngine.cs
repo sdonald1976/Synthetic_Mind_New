@@ -148,9 +148,14 @@ public sealed class MindEngine
     /// <summary>Perceive the real room: webcam (device 0) + microphone.</summary>
     public void RunLive()
     {
+        Log?.Invoke("opening webcam...");
         VideoCapture? cam = null;
-        try { cam = new VideoCapture(0); } catch { }
-        if (cam is null || !cam.IsOpened()) { Log?.Invoke("no webcam on device 0 — can't perceive the room."); return; }
+        for (var dev = 0; dev <= 1; dev++)
+        {
+            try { cam?.Dispose(); cam = new VideoCapture(dev); } catch (Exception ex) { Log?.Invoke($"  device {dev}: {ex.Message}"); continue; }
+            if (cam.IsOpened()) { Log?.Invoke($"webcam opened (device {dev})."); break; }
+        }
+        if (cam is null || !cam.IsOpened()) { Log?.Invoke("no webcam found (tried device 0 and 1). Is another app using it, or is camera access blocked in Windows privacy settings?"); return; }
 
         var micQueue = new Queue<float>();
         var micGate = new object();
@@ -166,10 +171,16 @@ public sealed class MindEngine
         Waking();
         Log?.Invoke("awake. perceiving the real room (webcam + mic).");
         using var frame = new Mat();
+        var warmup = 0; var gotFrame = false;
         while (_alive)
         {
             if (Paused) { Thread.Sleep(30); continue; }
-            if (!cam.Read(frame) || frame.Empty()) { Thread.Sleep(5); continue; }
+            if (!cam.Read(frame) || frame.Empty())
+            {
+                if (!gotFrame && ++warmup == 300) Log?.Invoke("webcam opened but no frames arriving — likely Windows camera-privacy blocking, or another app holding it.");
+                Thread.Sleep(5); continue;
+            }
+            if (!gotFrame) { gotFrame = true; Log?.Invoke("receiving frames — perceiving the room."); }
             SeeFrame(frame);
             float[] block;
             lock (micGate) { block = micQueue.ToArray(); micQueue.Clear(); }
