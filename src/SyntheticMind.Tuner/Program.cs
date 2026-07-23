@@ -53,7 +53,12 @@ sealed class Tuner : Form
         var liveBtn = new Button { Text = "Live (cam+mic)", Width = 110 };
         var fetch = new Button { Text = "Fetch URL & watch", Width = 130 };
         var stop = new Button { Text = "Stop", Width = 60 };
-        watch.Click += (_, _) => Start(() => _engine!.RunWorld(Path.GetFullPath(_source.Text.Trim())));
+        watch.Click += (_, _) =>
+        {
+            var src = _source.Text.Trim();
+            if (src.StartsWith("http", StringComparison.OrdinalIgnoreCase)) FetchAndWatch(src);   // a URL → fetch first
+            else Start(() => _engine!.RunWorld(Path.GetFullPath(src)));
+        };
         liveBtn.Click += (_, _) => Start(() => _engine!.RunLive());
         fetch.Click += (_, _) => FetchAndWatch(_source.Text.Trim());
         stop.Click += (_, _) => StopEngine();
@@ -110,26 +115,43 @@ sealed class Tuner : Form
     // Fetch a URL/playlist with the yt-dlp wrapper, streaming progress to the transcript, then watch it.
     private void FetchAndWatch(string url)
     {
-        if (string.IsNullOrWhiteSpace(url) || url == "temp") { Log("put a video/playlist URL in the source box first."); return; }
+        if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        { Log("put a video/playlist URL (http…) in the source box first, then Fetch."); return; }
+
+        // Find the script relative to the repo (works whether launched from repo root or the bin dir).
+        var script = new[]
+        {
+            Path.GetFullPath(Path.Combine("tools", "fetch-playlist.ps1")),
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "tools", "fetch-playlist.ps1")),
+        }.FirstOrDefault(File.Exists);
+        if (script is null) { Log("can't find tools/fetch-playlist.ps1 — run the tuner from the repo root."); return; }
+
         StopEngine();
         _transcript.Clear();
         var outFolder = Path.GetFullPath("youtube-tuner");
         new Thread(() =>
         {
-            Log($"fetching {url} → {outFolder} (yt-dlp)...");
+            Log($"fetching {url}");
+            Log($"  → {outFolder} (this can take a while for a playlist)...");
             try
             {
-                var script = Path.GetFullPath("tools/fetch-playlist.ps1");
-                var psi = new ProcessStartInfo("powershell", $"-ExecutionPolicy Bypass -File \"{script}\" \"{url}\" -Out \"{outFolder}\"")
+                // -Command with *>&1 merges ALL PowerShell streams (incl. Write-Host) into stdout so we
+                // actually see the script's progress; single-quote the args so '&' in playlist URLs is literal.
+                var psi = new ProcessStartInfo("powershell",
+                    $"-NoProfile -ExecutionPolicy Bypass -Command \"& '{script}' '{url}' -Out '{outFolder}' *>&1\"")
                 { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
                 using var p = Process.Start(psi)!;
-                p.OutputDataReceived += (_, e) => { if (e.Data is { Length: > 0 }) Log(e.Data); };
-                p.ErrorDataReceived += (_, e) => { if (e.Data is { Length: > 0 }) Log(e.Data); };
+                p.OutputDataReceived += (_, e) => { if (e.Data is { Length: > 0 }) Log("  " + e.Data); };
+                p.ErrorDataReceived += (_, e) => { if (e.Data is { Length: > 0 }) Log("  ! " + e.Data); };
                 p.BeginOutputReadLine(); p.BeginErrorReadLine();
                 p.WaitForExit();
+                Log($"fetch finished (exit {p.ExitCode}).");
             }
-            catch (Exception ex) { Log($"fetch failed: {ex.Message}"); return; }
-            Log("fetched. now watching.");
+            catch (Exception ex) { Log($"fetch failed to start: {ex.Message}"); return; }
+
+            var got = Directory.Exists(outFolder) ? Directory.GetFiles(outFolder, "*.mp4").Length : 0;
+            if (got == 0) { Log("no videos downloaded — check the URL and the messages above."); return; }
+            Log($"got {got} video(s). now watching.");
             if (!IsDisposed) BeginInvoke(() => Start(() => _engine!.RunWorld(outFolder)));   // Start must run on the UI thread
         }) { IsBackground = true }.Start();
     }
