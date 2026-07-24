@@ -42,6 +42,8 @@ public sealed class MindEngine
     public float SkinSuppress { get => _attention.SkinSuppress; set => _attention.SkinSuppress = value; }
     /// <summary>Video playback speed (1 = real-time). Paces RunWorld so you can slow it down to teach.</summary>
     public float PlaybackSpeed { get; set; } = 1f;
+    /// <summary>Motion↔sound correlation needed to look at the sound source (audio-visual correspondence).</summary>
+    public float AvThreshold { get => _attention.AvThreshold; set => _attention.AvThreshold = value; }
 
     public int WordCount => _wordVq.Count;
     public int ObjectCount => _objectVq.Count;
@@ -65,6 +67,7 @@ public sealed class MindEngine
     private readonly float[] _ring = new float[SaySamples];
     private int _ringPos, _ringCount;
     private float _audioBaseline = 1e-4f;
+    private float _recentAudioEnergy;      // rolling sound level, for audio-visual correspondence
     private int _currentObject = -1;
     private WordSegmenter _seg = new(MelBands);
     private long _tick, _spoken, _wordsHeard, _lastSpeakTick = -10000;
@@ -246,7 +249,7 @@ public sealed class MindEngine
             _blue[i] = b; _green[i] = g; _red[i] = r;
             _luma[i] = 0.114f * b + 0.587f * g + 0.299f * r;
         }
-        var (objFeat, x0, y0, w, h) = _attention.Attend(_luma, _red, _green, _blue, CamW, CamH);
+        var (objFeat, x0, y0, w, h) = _attention.Attend(_luma, _red, _green, _blue, CamW, CamH, _recentAudioEnergy);
         _currentObject = _objectVq.Quantize(objFeat);
 
         // Preview, throttled to ~15 fps: the REAL frame at display size, with the attention window
@@ -287,6 +290,7 @@ public sealed class MindEngine
             var mel = _cochlea.Process(_buf);
             var s = _audioL0.Observe(mel).SquaredError;
             _audioBaseline += 0.001f * (s - _audioBaseline);
+            _recentAudioEnergy += 0.4f * (energy - _recentAudioEnergy);   // track the sound envelope
             var word = _seg.Accept(mel, energy);
             if (word is null) continue;
 

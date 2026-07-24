@@ -46,6 +46,15 @@ public sealed class ObjectAttention
     private int _glanceLeft;                  // frames remaining in the current glance
     private readonly List<float[]> _taughtProtos = new();   // normalized signatures of things you taught it to look at
 
+    // Audio-visual correspondence: attend to the region whose motion syncs with the sound (a mouth
+    // when talking). A short history of per-cell motion and of the sound energy, correlated per frame.
+    private const int AvWindow = 12;
+    private float[]? _motionHist;                          // [cell * AvWindow + t]
+    private readonly float[] _audioHist = new float[AvWindow];
+    private int _histPos, _histCount;
+    /// <summary>Motion↔sound correlation needed to attend to the sound source. Lower = more eager.</summary>
+    public float AvThreshold { get; set; } = 0.4f;
+
     public ObjectAttention(Retina fovea, int coarseX = 16, int coarseY = 12, float windowFrac = 0.5f,
         AttentionMode mode = AttentionMode.Saliency, float bgRate = 0.03f,
         int glanceFrames = 14, float glanceTrigger = 2.5f)
@@ -148,11 +157,76 @@ public sealed class ObjectAttention
     }
     private static float Dot(float[] a, float[] b) { var s = 0f; for (var i = 0; i < a.Length; i++) s += a[i] * b[i]; return s; }
 
+    // Push this frame's per-cell motion + the sound energy into the rolling history (aligned in time).
+    private void PushAv(float[] luma, int width, int height, float audioEnergy)
+    {
+        var cells = _coarseX * _coarseY;
+        _motionHist ??= new float[cells * AvWindow];
+        if (_prevLuma is not null)
+        {
+            var mg = new float[cells];
+            for (var y = 0; y < height; y++)
+            {
+                var cy = y * _coarseY / height;
+                for (var x = 0; x < width; x++)
+                {
+                    var i = y * width + x;
+                    mg[cy * _coarseX + x * _coarseX / width] += MathF.Abs(luma[i] - _prevLuma[i]);
+                }
+            }
+            for (var c = 0; c < cells; c++) _motionHist[c * AvWindow + _histPos] = mg[c];
+        }
+        else for (var c = 0; c < cells; c++) _motionHist[c * AvWindow + _histPos] = 0f;
+
+        _audioHist[_histPos] = audioEnergy;
+        _histPos = (_histPos + 1) % AvWindow;
+        if (_histCount < AvWindow) _histCount++;
+    }
+
+    // The cell whose motion history best correlates with the sound history — the sound's visual source.
+    private int SoundSourceCell(out float bestCorr)
+    {
+        bestCorr = 0f;
+        if (_histCount < AvWindow || _motionHist is null) return -1;
+
+        var aMean = 0f;
+        foreach (var a in _audioHist) aMean += a;
+        aMean /= AvWindow;
+        if (aMean < 1e-5f) return -1;   // essentially silence — no sound to look toward
+        var aVar = 0f;
+        foreach (var a in _audioHist) { var d = a - aMean; aVar += d * d; }
+        if (aVar < 1e-9f) return -1;
+
+        var cells = _coarseX * _coarseY;
+        var best = -1;
+        for (var c = 0; c < cells; c++)
+        {
+            var mMean = 0f;
+            for (var t = 0; t < AvWindow; t++) mMean += _motionHist[c * AvWindow + t];
+            mMean /= AvWindow;
+            float mVar = 0f, cov = 0f;
+            for (var t = 0; t < AvWindow; t++)
+            {
+                var dm = _motionHist[c * AvWindow + t] - mMean;
+                cov += dm * (_audioHist[t] - aMean);
+                mVar += dm * dm;
+            }
+            if (mVar < 1e-9f) continue;
+            var corr = cov / MathF.Sqrt(mVar * aVar);
+            if (corr > bestCorr) { bestCorr = corr; best = c; }
+        }
+        return best;
+    }
+
+    /// <param name="audioEnergy">The sound level right now — lets attention find the moving thing that
+    /// syncs with the sound (audio-visual correspondence). 0 (default) disables it.</param>
     public (float[] Features, int X0, int Y0, int W, int H) Attend(
-        float[] luma, float[] red, float[] green, float[] blue, int width, int height)
+        float[] luma, float[] red, float[] green, float[] blue, int width, int height, float audioEnergy = 0f)
     {
         float mR = Mean(red), mG = Mean(green), mB = Mean(blue);
         int focus;
+
+        PushAv(luma, width, height, audioEnergy);   // track motion↔sound history
 
         if (_mode == AttentionMode.PersonCentred)
         {
@@ -164,12 +238,19 @@ public sealed class ObjectAttention
             if (!_novInit) { _novBaseline = novStrength; _novInit = true; }
             if (!_anchorInit) { _anchorX = salPeak % _coarseX; _anchorY = salPeak / _coarseX; _anchorInit = true; }
 
-            // Stage 3 — taught pull: if something you taught it to look at is clearly in view, go there.
+            // taught pull: if something you taught it to look at is clearly in view, go there.
             var taughtCell = _taughtProtos.Count > 0 ? BestTaughtCell(luma, red, green, blue, width, height, sal, nov) : -1;
+            // audio-visual correspondence: the moving thing making the sound (a talking mouth).
+            var soundCell = SoundSourceCell(out var corr);
 
             if (taughtCell >= 0)
             {
-                focus = taughtCell;          // a taught thing wins over the usual anchor/glance
+                focus = taughtCell;          // a taught thing wins over everything
+                _glanceLeft = _glanceFrames;
+            }
+            else if (soundCell >= 0 && corr >= AvThreshold)
+            {
+                focus = soundCell;           // look at what's making the sound
                 _glanceLeft = _glanceFrames;
             }
             else if (_glanceLeft > 0)
