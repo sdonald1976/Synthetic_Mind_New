@@ -24,7 +24,7 @@ public readonly record struct Percept(byte[] Bgr, int Width, int Height, int Box
 public sealed class MindEngine
 {
     private const int SampleRate = 16000, Hop = 160, Fft = 512, MelBands = 20, CamW = 120, CamH = 90, FrameStride = 3;
-    private const int FoveaGrid = 8, Orientations = 4, TrajKeys = 3, TrajFrames = 8, SaySamples = 3600;
+    private const int FoveaGrid = 8, Orientations = 4, TrajKeys = 3, TrajFrames = 8, SaySamples = 8000;   // 0.5s @16kHz — a word, not a syllable-blip
     private const int DispW = 480, DispH = 360;   // preview resolution (the real frame, not the 120×90 the mind sees)
 
     /// <summary>Inner-life narration (what it hears, binds, says). The console prints these.</summary>
