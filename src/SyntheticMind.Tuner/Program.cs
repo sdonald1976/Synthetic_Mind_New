@@ -36,6 +36,7 @@ sealed class Tuner : Form
     private Thread? _thread;
     private Percept _latest;
     private volatile bool _hasFrame;
+    private volatile bool _fetching;
     private readonly object _gate = new();
 
     public Tuner()
@@ -92,7 +93,7 @@ sealed class Tuner : Form
     {
         StopEngine();
         _transcript.Clear();
-        var stateDir = Path.GetFullPath("mind-state");
+        var stateDir = MindPaths.State;   // repo-root/mind-state — findable, and shared with the console mind
         var cooldown = _cooldown.Value;   // read UI controls HERE, on the UI thread
         var support = _support.Value;
         _thread = new Thread(() =>
@@ -112,13 +113,19 @@ sealed class Tuner : Form
         _engine = null; _thread = null; _hasFrame = false;
     }
 
-    // Fetch a URL/playlist with the yt-dlp wrapper, streaming progress to the transcript, then watch it.
+    // Complete videos in the download folder (exclude yt-dlp's ".fNNN.mp4" merge fragments).
+    private static string[] CompleteVideos(string folder) => Directory.Exists(folder)
+        ? Directory.GetFiles(folder, "*.mp4").Where(f => !Path.GetFileNameWithoutExtension(f).Contains(".f")).ToArray()
+        : [];
+
+    // Fetch a URL/playlist with the yt-dlp wrapper; start watching the FIRST video as soon as it lands
+    // and keep downloading the rest in the background (the mind re-scans the folder each pass).
     private void FetchAndWatch(string url)
     {
         if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
         { Log("put a video/playlist URL (http…) in the source box first, then Fetch."); return; }
+        if (_fetching) { Log("already fetching — let it finish, or hit Stop first."); return; }
 
-        // Find the script relative to the repo (works whether launched from repo root or the bin dir).
         var script = new[]
         {
             Path.GetFullPath(Path.Combine("tools", "fetch-playlist.ps1")),
@@ -128,31 +135,43 @@ sealed class Tuner : Form
 
         StopEngine();
         _transcript.Clear();
-        var outFolder = Path.GetFullPath("youtube-tuner");
+        _fetching = true;
+        var outFolder = MindPaths.Downloads;
+        var started = false;
         new Thread(() =>
         {
             Log($"fetching {url}");
-            Log($"  → {outFolder} (this can take a while for a playlist)...");
+            Log($"  → {outFolder} (a long playlist indexes fully before the first file appears)...");
             try
             {
-                // -Command with *>&1 merges ALL PowerShell streams (incl. Write-Host) into stdout so we
-                // actually see the script's progress; single-quote the args so '&' in playlist URLs is literal.
                 var psi = new ProcessStartInfo("powershell",
                     $"-NoProfile -ExecutionPolicy Bypass -Command \"& '{script}' '{url}' -Out '{outFolder}' *>&1\"")
                 { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
                 using var p = Process.Start(psi)!;
-                p.OutputDataReceived += (_, e) => { if (e.Data is { Length: > 0 }) Log("  " + e.Data); };
-                p.ErrorDataReceived += (_, e) => { if (e.Data is { Length: > 0 }) Log("  ! " + e.Data); };
+                // Skip yt-dlp's per-frame progress spam; keep the meaningful lines.
+                p.OutputDataReceived += (_, e) => { if (e.Data is { Length: > 0 } d && !(d.Contains("% of") && !d.Contains("100%"))) Log("  " + d.Trim()); };
+                p.ErrorDataReceived += (_, e) => { if (e.Data is { Length: > 0 } d) Log("  ! " + d); };
                 p.BeginOutputReadLine(); p.BeginErrorReadLine();
-                p.WaitForExit();
+
+                while (!p.HasExited)
+                {
+                    if (!started && CompleteVideos(outFolder).Length > 0)
+                    {
+                        started = true;
+                        Log("first video ready — watching now while the rest download.");
+                        if (!IsDisposed) BeginInvoke(() => Start(() => _engine!.RunWorld(outFolder)));
+                    }
+                    Thread.Sleep(1000);
+                }
                 Log($"fetch finished (exit {p.ExitCode}).");
             }
-            catch (Exception ex) { Log($"fetch failed to start: {ex.Message}"); return; }
+            catch (Exception ex) { Log($"fetch failed to start: {ex.Message}"); _fetching = false; return; }
+            _fetching = false;
 
-            var got = Directory.Exists(outFolder) ? Directory.GetFiles(outFolder, "*.mp4").Length : 0;
+            var got = CompleteVideos(outFolder).Length;
             if (got == 0) { Log("no videos downloaded — check the URL and the messages above."); return; }
-            Log($"got {got} video(s). now watching.");
-            if (!IsDisposed) BeginInvoke(() => Start(() => _engine!.RunWorld(outFolder)));   // Start must run on the UI thread
+            Log($"got {got} video(s).");
+            if (!started && !IsDisposed) BeginInvoke(() => Start(() => _engine!.RunWorld(outFolder)));
         }) { IsBackground = true }.Start();
     }
 
@@ -162,7 +181,7 @@ sealed class Tuner : Form
         BeginInvoke(() =>
         {
             _transcript.AppendText(line + Environment.NewLine);
-            if (_transcript.Lines.Length > 500) _transcript.Text = string.Join(Environment.NewLine, _transcript.Lines[^400..]);
+            if (_transcript.Lines.Length > 700) _transcript.Lines = _transcript.Lines[^400..];   // trim rarely, not every line
             _transcript.SelectionStart = _transcript.TextLength; _transcript.ScrollToCaret();
         });
     }

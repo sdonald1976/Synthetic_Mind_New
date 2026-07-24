@@ -109,9 +109,10 @@ public sealed class MindEngine
     public void RunWorld(string folder)
     {
         var exts = new[] { ".mp4", ".avi", ".mov", ".mkv", ".webm", ".m4v" };
-        var videos = Directory.Exists(folder)
+        string[] Scan() => Directory.Exists(folder)
             ? Directory.GetFiles(folder).Where(f => exts.Contains(Path.GetExtension(f).ToLowerInvariant())).OrderBy(f => f).ToArray()
             : [];
+        var videos = Scan();
         if (videos.Length == 0) { Log?.Invoke($"no world in {folder}. Point me at a folder of videos, or go live."); return; }
 
         Waking();
@@ -144,7 +145,8 @@ public sealed class MindEngine
                     if (++_tick % 2000 == 0) { Status(); Remember(); }
                 }
             }
-            Log?.Invoke("— finished a pass over its world; going round again.");
+            videos = Scan();   // re-scan so a still-downloading playlist's new videos get picked up
+            Log?.Invoke($"— finished a pass ({videos.Length} video(s) now); going round again.");
         }
         Remember();
     }
@@ -265,8 +267,9 @@ public sealed class MindEngine
         var recalled = _binder.HeardForSeen(_currentObject, minJointCount: RecallSupport);
         if (recalled is not { } r || !_soundMemory.TryGetValue(r.Heard, out var target)) return;
         var (control, _, _) = _mouth.Imitate(target, refineSteps: 80);
-        WavWriter.WriteMono(Path.Combine(_saidDir, $"utt{_spoken:D4}.wav"), _synth.SynthesizeTrajectory(ToKeys(control), SaySamples), SampleRate);
-        Log?.Invoke($"sees object #{_currentObject} — remembers its word (#{r.Heard}, bound {r.JointCount}x) — says it → utt{_spoken:D4}.wav");
+        var name = $"utt{_spoken % 500:D3}.wav";   // cycle through 500 files so said/ doesn't grow without bound
+        WavWriter.WriteMono(Path.Combine(_saidDir, name), _synth.SynthesizeTrajectory(ToKeys(control), SaySamples), SampleRate);
+        Log?.Invoke($"sees object #{_currentObject} — remembers its word (#{r.Heard}, bound {r.JointCount}x) — says it → {name}");
         _lastSpeakTick = _tick; _spoken++;
     }
 

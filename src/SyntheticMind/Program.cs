@@ -11,7 +11,7 @@ using SyntheticMind.Runtime;
 
 var live = args.Contains("--live");
 var world = Path.GetFullPath(args.FirstOrDefault(a => !a.StartsWith("--")) ?? "temp");
-var stateDir = Path.GetFullPath("mind-state");
+var stateDir = MindPaths.State;   // repo-root/mind-state, wherever it's launched from
 
 Console.WriteLine("\n  SyntheticMind — waking up. babbling to learn its own voice...");
 var engine = new MindEngine(stateDir);
