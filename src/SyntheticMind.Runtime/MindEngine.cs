@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using NAudio.Wave;
 using OpenCvSharp;
 using SyntheticMind.Audio;
@@ -50,7 +51,7 @@ public sealed class MindEngine
     public int Bindings => _binder.Episodes;
     public long Ticks => _tick;
 
-    private readonly string _stateDir, _saidDir, _objectCbPath, _wordCbPath, _pairingsPath;
+    private readonly string _stateDir, _saidDir, _objectCbPath, _wordCbPath, _pairingsPath, _taughtPath;
     private readonly Cochlea _cochlea;
     private readonly Unit _audioL0;
     private readonly ObjectAttention _attention;
@@ -88,6 +89,7 @@ public sealed class MindEngine
         _objectCbPath = Path.Combine(stateDir, "object-codebook.json");
         _wordCbPath = Path.Combine(stateDir, "word-codebook.json");
         _pairingsPath = Path.Combine(stateDir, "pairings.json");
+        _taughtPath = Path.Combine(stateDir, "taught.json");
 
         _cochlea = new Cochlea(SampleRate, Fft, MelBands);
         _audioL0 = new Unit(new LearnedPredictiveRule(MelBands, stateWidth: 8, history: 8, quadraticFeatures: 0));
@@ -100,6 +102,8 @@ public sealed class MindEngine
         if (_objectVq.Count > 0 && _objectVq.Dimension != objectWidth)
         { _wordVq = new VectorQuantizer(48, 0.20f); _objectVq = new VectorQuantizer(64, 0.30f, subtractRunningMean: true); }
         _binder = CrossSituationalBinder.LoadOrNew(_pairingsPath);
+        if (File.Exists(_taughtPath))
+            try { var t = JsonSerializer.Deserialize<float[][]>(File.ReadAllText(_taughtPath)); if (t is not null) _attention.ImportTaught(t); } catch { }
 
         _synth = new FormantSynth(SampleRate);
         _mouth = new VocalBabbler(TrajKeys * _synth.ControlCount, TrajFrames * MelBands,
@@ -119,12 +123,9 @@ public sealed class MindEngine
     /// while Paused so the frame it describes is the one you framed. (Stage 1: captured + logged.)</summary>
     public void Teach(float nx, float ny, float nw, float nh)
     {
-        var x0 = Math.Clamp((int)(nx * CamW), 0, CamW - 2);
-        var y0 = Math.Clamp((int)(ny * CamH), 0, CamH - 2);
-        var w = Math.Clamp((int)(nw * CamW), 2, CamW - x0);
-        var h = Math.Clamp((int)(nh * CamH), 2, CamH - y0);
-        var feat = _attention.Describe(_luma, _red, _green, _blue, CamW, x0, y0, w, h);
-        _attention.LearnFocus(feat);
+        var cx = Math.Clamp(nx + nw / 2f, 0f, 1f);   // the box's centre — described at the standard scale
+        var cy = Math.Clamp(ny + nh / 2f, 0f, 1f);
+        _attention.LearnFocusAt(_luma, _red, _green, _blue, CamW, CamH, cx, cy);
         Log?.Invoke($"taught 'look here' → now watching for {_attention.TaughtCount} kind(s) of thing; it'll get pulled toward regions like this.");
     }
 
@@ -314,7 +315,11 @@ public sealed class MindEngine
     }
 
     private void Status() => Log?.Invoke($"[{_tick}] {_wordVq.Count} words / {_objectVq.Count} objects / {_binder.Episodes} bindings · heard {_wordsHeard} · ear-surprise {_audioBaseline:F3} · said {_spoken}x");
-    private void Remember() { _objectVq.Save(_objectCbPath); _wordVq.Save(_wordCbPath); _binder.Save(_pairingsPath); }
+    private void Remember()
+    {
+        _objectVq.Save(_objectCbPath); _wordVq.Save(_wordCbPath); _binder.Save(_pairingsPath);
+        try { File.WriteAllText(_taughtPath, JsonSerializer.Serialize(_attention.ExportTaught())); } catch { }
+    }
 
     private float[][] ToKeys(float[] c)
     {

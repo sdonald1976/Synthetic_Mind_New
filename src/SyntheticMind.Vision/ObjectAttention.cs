@@ -112,37 +112,44 @@ public sealed class ObjectAttention
         return best;
     }
 
-    // Stage 3: of the most salient/novel candidate cells, the one whose region best matches a taught
-    // thing (above a similarity floor) — or -1 if nothing you taught it is clearly in view.
-    private int BestTaughtCell(float[] luma, float[] red, float[] green, float[] blue, int width, int height, float[] sal, float[] nov)
+    /// <summary>Teach it to look at the region around a normalized point, described the SAME way the
+    /// runtime scan describes candidates (a WindowFrac window) — so a taught thing actually matches
+    /// when it reappears, regardless of how tightly you framed it.</summary>
+    public void LearnFocusAt(float[] luma, float[] red, float[] green, float[] blue, int width, int height, float cxNorm, float cyNorm)
     {
-        Span<int> top = stackalloc int[6];
-        Span<float> topv = stackalloc float[6];
-        top.Fill(-1); topv.Fill(-1f);
-        for (var c = 0; c < sal.Length; c++)
-        {
-            var v = sal[c] + nov[c];
-            for (var k = 0; k < 6; k++) if (v > topv[k]) { for (var j = 5; j > k; j--) { topv[j] = topv[j - 1]; top[j] = top[j - 1]; } topv[k] = v; top[k] = c; break; }
-        }
+        var (x0, y0, wW, hH) = WindowAt(cxNorm * width, cyNorm * height, width, height);
+        LearnFocus(Describe(luma, red, green, blue, width, x0, y0, wW, hH));
+    }
+
+    /// <summary>Save/restore taught signatures so teaching survives a restart.</summary>
+    public float[][] ExportTaught() => _taughtProtos.ToArray();
+    public void ImportTaught(float[][] protos) { _taughtProtos.Clear(); _taughtProtos.AddRange(protos); }
+
+    // Scan a GRID of window positions across the whole frame (not just the salient ones, so a taught
+    // thing can be found even when it isn't salient) for the best match to something you taught.
+    private int BestTaughtCell(float[] luma, float[] red, float[] green, float[] blue, int width, int height)
+    {
         var best = -1; var bestScore = 0.7f;   // similarity floor to count as "a taught thing is here"
-        foreach (var cell in top)
-        {
-            if (cell < 0) continue;
-            var (x0, y0, wW, hH) = CellWindow(cell, width, height);
-            var s = TaughtScore(Describe(luma, red, green, blue, width, x0, y0, wW, hH));
-            if (s > bestScore) { bestScore = s; best = cell; }
-        }
+        for (var cy = 1; cy < _coarseY; cy += 2)
+            for (var cx = 1; cx < _coarseX; cx += 2)
+            {
+                var cell = cy * _coarseX + cx;
+                var (x0, y0, wW, hH) = CellWindow(cell, width, height);
+                var s = TaughtScore(Describe(luma, red, green, blue, width, x0, y0, wW, hH));
+                if (s > bestScore) { bestScore = s; best = cell; }
+            }
         return best;
     }
 
-    private (int X0, int Y0, int W, int H) CellWindow(int cell, int width, int height)
+    private (int X0, int Y0, int W, int H) WindowAt(float pcx, float pcy, int width, int height)
     {
-        var pcx = (cell % _coarseX + 0.5f) / _coarseX * width;
-        var pcy = (cell / _coarseX + 0.5f) / _coarseY * height;
         var wW = Math.Max(4, (int)(width * WindowFrac));
         var hH = Math.Max(4, (int)(height * WindowFrac));
         return (Math.Clamp((int)(pcx - wW / 2f), 0, width - wW), Math.Clamp((int)(pcy - hH / 2f), 0, height - hH), wW, hH);
     }
+
+    private (int X0, int Y0, int W, int H) CellWindow(int cell, int width, int height)
+        => WindowAt((cell % _coarseX + 0.5f) / _coarseX * width, (cell / _coarseX + 0.5f) / _coarseY * height, width, height);
 
     private static float[] Unit(float[] v)
     {
@@ -239,7 +246,7 @@ public sealed class ObjectAttention
             if (!_anchorInit) { _anchorX = salPeak % _coarseX; _anchorY = salPeak / _coarseX; _anchorInit = true; }
 
             // taught pull: if something you taught it to look at is clearly in view, go there.
-            var taughtCell = _taughtProtos.Count > 0 ? BestTaughtCell(luma, red, green, blue, width, height, sal, nov) : -1;
+            var taughtCell = _taughtProtos.Count > 0 ? BestTaughtCell(luma, red, green, blue, width, height) : -1;
             // audio-visual correspondence: the moving thing making the sound (a talking mouth).
             var soundCell = SoundSourceCell(out var corr);
 
