@@ -150,11 +150,11 @@ public sealed class MindEngine
                 _seg = new WordSegmenter(MelBands); _hopFill = 0; _ringCount = 0; _ringPos = 0;
                 using var frame = new Mat();
                 var samplePos = 0; var frameIndex = 0;
-                var swStart = Environment.TickCount64;   // wall clock at this video's start, for pacing
+                var lastWall = Environment.TickCount64; var lastTMs = 0.0;   // for per-frame delta pacing
 
                 while (_alive)
                 {
-                    if (Paused) { Thread.Sleep(30); continue; }
+                    if (Paused) { Thread.Sleep(30); lastWall = Environment.TickCount64; continue; }   // don't count paused time
                     var doFrame = frameIndex % FrameStride == 0;
                     var ok = doFrame ? cap.Read(frame) : cap.Grab();
                     if (!ok || (doFrame && frame.Empty())) break;
@@ -168,14 +168,17 @@ public sealed class MindEngine
                     MaybeSpeak();
                     if (++_tick % 2000 == 0) { Status(); Remember(); }
 
-                    // Pace to real-time × (1/PlaybackSpeed) so it can be slowed down for teaching.
+                    // Pace THIS frame's delta to real-time × (1/speed). Delta-based, so changing speed
+                    // takes effect on the very next frame instead of retroactively rescheduling.
                     var speed = PlaybackSpeed;
-                    if (speed > 0.01f)
+                    var dtVideo = tMs - lastTMs; lastTMs = tMs;
+                    if (speed > 0.01f && dtVideo is > 0 and < 5000)   // ignore first frame / seeks
                     {
-                        var targetWall = swStart + (long)(tMs / speed);
+                        var targetWall = lastWall + (long)(dtVideo / speed);
                         for (var wait = targetWall - Environment.TickCount64; wait > 0 && _alive && !Paused; wait = targetWall - Environment.TickCount64)
                             Thread.Sleep((int)Math.Min(50, wait));
                     }
+                    lastWall = Environment.TickCount64;
                 }
             }
             videos = Scan();   // re-scan so a still-downloading playlist's new videos get picked up
