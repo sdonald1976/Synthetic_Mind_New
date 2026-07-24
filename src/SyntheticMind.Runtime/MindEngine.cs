@@ -86,7 +86,8 @@ public sealed class MindEngine
 
         _cochlea = new Cochlea(SampleRate, Fft, MelBands);
         _audioL0 = new Unit(new LearnedPredictiveRule(MelBands, stateWidth: 8, history: 8, quadraticFeatures: 0));
-        _attention = new ObjectAttention(new Retina(FoveaGrid, motion: false, orientations: Orientations, color: true), mode: AttentionMode.PersonCentred);
+        _attention = new ObjectAttention(new Retina(FoveaGrid, motion: false, orientations: Orientations, color: true), mode: AttentionMode.PersonCentred)
+        { SkinSuppress = 0.25f };   // live-tuned default: lets a held-up object beat the face/arm, still rests on the person
         var objectWidth = _attention.Width;
 
         _wordVq = VectorQuantizer.LoadOrNew(_wordCbPath, capacity: 48, newUnitThreshold: 0.20f);

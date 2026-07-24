@@ -28,7 +28,7 @@ sealed class Tuner : Form
     private readonly TrackBar _cooldown = new() { Minimum = 30, Maximum = 1500, Value = 300, Width = 130, TickFrequency = 300 };
     private readonly TrackBar _support = new() { Minimum = 2, Maximum = 20, Value = 4, Width = 90, TickFrequency = 2 };
     private readonly TrackBar _glance = new() { Minimum = 10, Maximum = 40, Value = 25, Width = 110, TickFrequency = 5 };   // GlanceTrigger = value/10 (low = glances more)
-    private readonly TrackBar _skin = new() { Minimum = 0, Maximum = 100, Value = 0, Width = 110, TickFrequency = 25 };      // SkinSuppress = value/100
+    private readonly TrackBar _skin = new() { Minimum = 0, Maximum = 100, Value = 25, Width = 110, TickFrequency = 25 };     // SkinSuppress = value/100 (live-tuned default)
     private readonly Label _knobs = new() { AutoSize = true, ForeColor = Color.Gainsboro };
     private readonly Label _counters = new() { AutoSize = true, ForeColor = Color.DarkSeaGreen };
     private readonly Button _pause = new() { Text = "Pause", Width = 70 };
