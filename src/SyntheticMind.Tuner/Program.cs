@@ -56,6 +56,13 @@ sealed class Tuner : Form
         var liveBtn = new Button { Text = "Live (cam+mic)", Width = 110 };
         var fetch = new Button { Text = "Fetch URL & watch", Width = 130 };
         var stop = new Button { Text = "Stop", Width = 60 };
+        foreach (var b in new[] { watch, liveBtn, fetch, stop, _pause })   // white text on a dark button face
+        {
+            b.ForeColor = Color.White;
+            b.BackColor = Color.FromArgb(60, 64, 72);
+            b.FlatStyle = FlatStyle.Flat;
+            b.FlatAppearance.BorderColor = Color.FromArgb(96, 100, 108);
+        }
         watch.Click += (_, _) =>
         {
             var src = _source.Text.Trim();
