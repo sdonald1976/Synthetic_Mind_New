@@ -41,6 +41,10 @@ sealed class Tuner : Form
     private volatile bool _fetching;
     private readonly object _gate = new();
 
+    private RectangleF _userBox = new(0.35f, 0.35f, 0.3f, 0.3f);   // the box YOU point with, normalized [0,1]
+    private int _drag;              // 0 none · 1 move · 2 resize-corner · 3 draw-new
+    private PointF _dragOff;
+
     public Tuner()
     {
         Text = "SyntheticMind — tuner";
@@ -56,13 +60,15 @@ sealed class Tuner : Form
         var liveBtn = new Button { Text = "Live (cam+mic)", Width = 110 };
         var fetch = new Button { Text = "Fetch URL & watch", Width = 130 };
         var stop = new Button { Text = "Stop", Width = 60 };
-        foreach (var b in new[] { watch, liveBtn, fetch, stop, _pause })   // white text on a dark button face
+        var teach = new Button { Text = "Teach focus", Width = 90 };
+        foreach (var b in new[] { watch, liveBtn, fetch, stop, _pause, teach })   // white text on a dark button face
         {
             b.ForeColor = Color.White;
             b.BackColor = Color.FromArgb(60, 64, 72);
             b.FlatStyle = FlatStyle.Flat;
             b.FlatAppearance.BorderColor = Color.FromArgb(96, 100, 108);
         }
+        teach.BackColor = Color.FromArgb(70, 90, 60);   // stands out — it's the teaching action
         watch.Click += (_, _) =>
         {
             var src = _source.Text.Trim();
@@ -73,13 +79,31 @@ sealed class Tuner : Form
         fetch.Click += (_, _) => FetchAndWatch(_source.Text.Trim());
         stop.Click += (_, _) => StopEngine();
         _pause.Click += (_, _) => { if (_engine is { } e) { e.Paused = !e.Paused; _pause.Text = e.Paused ? "Resume" : "Pause"; } };
+        teach.Click += (_, _) => { if (_engine is { } e) e.Teach(_userBox.X, _userBox.Y, _userBox.Width, _userBox.Height); };
         _cooldown.Scroll += (_, _) => ApplyKnobs();
         _support.Scroll += (_, _) => ApplyKnobs();
         _glance.Scroll += (_, _) => ApplyKnobs();
         _skin.Scroll += (_, _) => ApplyKnobs();
 
+        // Drag on the preview to frame a thing: empty → draw new; inside → move; near bottom-right → resize.
+        _view.MouseDown += (_, e) =>
+        {
+            var p = Norm(e);
+            if (Dist(p, new PointF(_userBox.Right, _userBox.Bottom)) < 0.04f) _drag = 2;
+            else if (_userBox.Contains(p)) { _drag = 1; _dragOff = new PointF(p.X - _userBox.X, p.Y - _userBox.Y); }
+            else { _drag = 3; _dragOff = p; _userBox = new RectangleF(p.X, p.Y, 0.001f, 0.001f); }
+        };
+        _view.MouseMove += (_, e) =>
+        {
+            if (_drag == 0) return;
+            var p = Norm(e);
+            if (_drag == 1) _userBox = new RectangleF(Clamp01(p.X - _dragOff.X, _userBox.Width), Clamp01(p.Y - _dragOff.Y, _userBox.Height), _userBox.Width, _userBox.Height);
+            else _userBox = FromCorners(_drag == 2 ? new PointF(_userBox.X, _userBox.Y) : _dragOff, p);
+        };
+        _view.MouseUp += (_, _) => _drag = 0;
+
         foreach (Control c in new Control[] {
-            L("source:"), _source, watch, liveBtn, fetch, stop, _pause,
+            L("source:"), _source, watch, liveBtn, fetch, stop, _pause, teach,
             L(" speak-gap:"), _cooldown, L("support:"), _support,
             L("glance-thresh:"), _glance, L("ignore-skin:"), _skin, _knobs, _counters })
             bar.Controls.Add(c);
@@ -93,6 +117,14 @@ sealed class Tuner : Form
     }
 
     private static Label L(string t) => new() { Text = t, AutoSize = true, ForeColor = Color.Gray, Margin = new Padding(6, 12, 2, 0) };
+
+    private PointF Norm(MouseEventArgs e) => new(
+        Math.Clamp(e.X / (float)Math.Max(1, _view.ClientSize.Width), 0f, 1f),
+        Math.Clamp(e.Y / (float)Math.Max(1, _view.ClientSize.Height), 0f, 1f));
+    private static float Dist(PointF a, PointF b) { float dx = a.X - b.X, dy = a.Y - b.Y; return MathF.Sqrt(dx * dx + dy * dy); }
+    private static float Clamp01(float v, float size) => Math.Clamp(v, 0f, Math.Max(0f, 1f - size));
+    private static RectangleF FromCorners(PointF a, PointF b) =>
+        new(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
     private void ApplyKnobs()
     {
@@ -208,12 +240,12 @@ sealed class Tuner : Form
     {
         Percept p; bool has;
         lock (_gate) { p = _latest; has = _hasFrame; }
-        if (has) { var old = _view.Image; _view.Image = Render(p, _view.ClientSize); old?.Dispose(); }
+        if (has) { var old = _view.Image; _view.Image = Render(p, _view.ClientSize, _userBox); old?.Dispose(); }
         if (_engine is { } e) _counters.Text = $"  {e.WordCount} words · {e.ObjectCount} objects · {e.Bindings} bindings · tick {e.Ticks}";
     }
 
-    // Frame (BGR) scaled up, with the attention window drawn as a box.
-    private static Bitmap Render(Percept p, Size target)
+    // Frame (BGR) scaled up, with the GREEN attention window and the GOLD human-pointed box drawn on it.
+    private static Bitmap Render(Percept p, Size target, RectangleF userBox)
     {
         using var frame = new Bitmap(p.Width, p.Height, PixelFormat.Format24bppRgb);
         var data = frame.LockBits(new Rectangle(0, 0, p.Width, p.Height), ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
@@ -225,10 +257,16 @@ sealed class Tuner : Form
         using var g = Graphics.FromImage(canvas);
         g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
         g.DrawImage(frame, 0, 0, w, h);
+
         var sx = w / (float)p.Width; var sy = h / (float)p.Height;
-        using var pen = new Pen(Color.Lime, 2);
-        g.DrawRectangle(pen, p.BoxX * sx, p.BoxY * sy, p.BoxW * sx, p.BoxH * sy);
+        using var green = new Pen(Color.Lime, 2);
+        g.DrawRectangle(green, p.BoxX * sx, p.BoxY * sy, p.BoxW * sx, p.BoxH * sy);
         g.DrawString($"attending → object #{p.ObjectUnit}", new Font("Consolas", 10), Brushes.Lime, 6, 6);
+
+        using var gold = new Pen(Color.Gold, 2);
+        g.DrawRectangle(gold, userBox.X * w, userBox.Y * h, userBox.Width * w, userBox.Height * h);
+        g.FillRectangle(Brushes.Gold, userBox.Right * w - 5, userBox.Bottom * h - 5, 10, 10);   // resize corner
+        g.DrawString("your box — drag to move, corner to resize · Pause, frame it, Teach focus", new Font("Consolas", 8), Brushes.Gold, 6, h - 18);
         return canvas;
     }
 }

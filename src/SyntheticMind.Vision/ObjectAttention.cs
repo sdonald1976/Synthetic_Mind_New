@@ -64,6 +64,15 @@ public sealed class ObjectAttention
     /// <summary>True while attention is glancing away at a held-up/pointed-at thing (vs. resting on the person).</summary>
     public bool Glancing => _glanceLeft > 0;
 
+    /// <summary>Describe an arbitrary region (a region a human pointed at) with the SAME fovea attention
+    /// uses everywhere else — so a taught region is represented identically to the codebook units, and
+    /// can be learned from and compared against them.</summary>
+    public float[] Describe(float[] luma, float[] red, float[] green, float[] blue, int width, int x0, int y0, int w, int h)
+    {
+        var (cl, cr, cg, cb) = Crop(luma, red, green, blue, width, x0, y0, w, h);
+        return _fovea.Process(cl, w, h, cr, cg, cb);
+    }
+
     public (float[] Features, int X0, int Y0, int W, int H) Attend(
         float[] luma, float[] red, float[] green, float[] blue, int width, int height)
     {

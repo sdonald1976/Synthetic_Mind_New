@@ -55,6 +55,7 @@ public sealed class MindEngine
     private readonly FormantSynth _synth;
     private readonly VocalBabbler _mouth;
     private readonly Dictionary<int, float[]> _soundMemory = new();
+    private readonly List<float[]> _taught = new();   // "look here" demonstrations (Stage 1: captured)
 
     // perception working state
     private readonly float[] _buf = new float[Fft];
@@ -108,6 +109,20 @@ public sealed class MindEngine
     }
 
     public void Stop() { _alive = false; }
+
+    /// <summary>Teach it where to look: a human points at a region (normalized [0,1] box on the frame),
+    /// and it captures that region's features — a "look at things like this" demonstration. Best done
+    /// while Paused so the frame it describes is the one you framed. (Stage 1: captured + logged.)</summary>
+    public void Teach(float nx, float ny, float nw, float nh)
+    {
+        var x0 = Math.Clamp((int)(nx * CamW), 0, CamW - 2);
+        var y0 = Math.Clamp((int)(ny * CamH), 0, CamH - 2);
+        var w = Math.Clamp((int)(nw * CamW), 2, CamW - x0);
+        var h = Math.Clamp((int)(nh * CamH), 2, CamH - y0);
+        var feat = _attention.Describe(_luma, _red, _green, _blue, CamW, x0, y0, w, h);
+        _taught.Add(feat);
+        Log?.Invoke($"taught 'look here' #{_taught.Count}: region [{x0},{y0} {w}x{h}] → {feat.Length}-dim example captured.");
+    }
 
     // --- drivers ----------------------------------------------------------------------------------
 
