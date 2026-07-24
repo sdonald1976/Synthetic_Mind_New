@@ -23,11 +23,19 @@ public sealed class ObjectAttention
 {
     private readonly Retina _fovea;
     private readonly int _coarseX, _coarseY;
-    private readonly float _windowFrac;
     private readonly AttentionMode _mode;
-    private readonly float _bgRate;
     private readonly int _glanceFrames;      // how long a glance at a held-up thing lasts
-    private readonly float _glanceTrigger;   // novelty spike (× baseline) that earns a glance
+
+    // Live-tunable (finding: the tuner exposes these so attention can be fought in real time).
+    /// <summary>Novelty spike (× baseline) that earns a glance. Lower = glances away more readily.</summary>
+    public float GlanceTrigger { get; set; }
+    /// <summary>Window side as a fraction of the frame.</summary>
+    public float WindowFrac { get; set; }
+    /// <summary>How fast the novelty background absorbs what it sees.</summary>
+    public float BgRate { get; set; }
+    /// <summary>0 = off; 1 = fully down-weight skin-toned pixels, so a non-skin object can out-compete a
+    /// face or bare arm for attention. A crude R&gt;G&gt;B heuristic — dial to taste.</summary>
+    public float SkinSuppress { get; set; }
 
     private float[]? _prevLuma;
     private float[]? _bgL, _bgR, _bgG, _bgB;  // running background (novelty)
@@ -44,11 +52,11 @@ public sealed class ObjectAttention
         _fovea = fovea;
         _coarseX = coarseX;
         _coarseY = coarseY;
-        _windowFrac = windowFrac;
         _mode = mode;
-        _bgRate = bgRate;
         _glanceFrames = glanceFrames;
-        _glanceTrigger = glanceTrigger;
+        WindowFrac = windowFrac;
+        BgRate = bgRate;
+        GlanceTrigger = glanceTrigger;
     }
 
     public int Width => _fovea.Width;
@@ -82,7 +90,7 @@ public sealed class ObjectAttention
                 // Resting on the person: drift the anchor toward the current salient (person) region.
                 _anchorX += 0.1f * (salPeak % _coarseX - _anchorX);
                 _anchorY += 0.1f * (salPeak / _coarseX - _anchorY);
-                if (novStrength > _glanceTrigger * _novBaseline + 1e-6f)
+                if (novStrength > GlanceTrigger * _novBaseline + 1e-6f)
                 {
                     _glanceLeft = _glanceFrames;   // something new appeared — glance at it
                     focus = novPeak;
@@ -108,8 +116,8 @@ public sealed class ObjectAttention
 
         var pcx = (focus % _coarseX + 0.5f) / _coarseX * width;
         var pcy = (focus / _coarseX + 0.5f) / _coarseY * height;
-        var wW = Math.Max(4, (int)(width * _windowFrac));
-        var wH = Math.Max(4, (int)(height * _windowFrac));
+        var wW = Math.Max(4, (int)(width * WindowFrac));
+        var wH = Math.Max(4, (int)(height * WindowFrac));
         var x0 = Math.Clamp((int)(pcx - wW / 2f), 0, width - wW);
         var y0 = Math.Clamp((int)(pcy - wH / 2f), 0, height - wH);
 
@@ -136,7 +144,9 @@ public sealed class ObjectAttention
                 var edge = MathF.Abs(luma[i + 1] - luma[i - 1]) + MathF.Abs(luma[i + width] - luma[i - width]);
                 var col = MathF.Abs(red[i] - mR) + MathF.Abs(green[i] - mG) + MathF.Abs(blue[i] - mB);
                 var mot = _prevLuma is not null ? MathF.Abs(luma[i] - _prevLuma[i]) : 0f;
-                sal[cy * _coarseX + x * _coarseX / width] += edge + col + 0.5f * mot;
+                var s = edge + col + 0.5f * mot;
+                if (SkinSuppress > 0) s *= 1f - SkinSuppress * Skin(red[i], green[i], blue[i]);
+                sal[cy * _coarseX + x * _coarseX / width] += s;
             }
         }
         return sal;
@@ -159,12 +169,14 @@ public sealed class ObjectAttention
                 var nov = MathF.Abs(luma[i] - _bgL![i]) + MathF.Abs(red[i] - _bgR![i])
                         + MathF.Abs(green[i] - _bgG![i]) + MathF.Abs(blue[i] - _bgB![i]);
                 var col = MathF.Abs(red[i] - mR) + MathF.Abs(green[i] - mG) + MathF.Abs(blue[i] - mB);
-                sal[cy * _coarseX + x * _coarseX / width] += nov + 0.25f * col;
+                var s = nov + 0.25f * col;
+                if (SkinSuppress > 0) s *= 1f - SkinSuppress * Skin(red[i], green[i], blue[i]);
+                sal[cy * _coarseX + x * _coarseX / width] += s;
 
-                _bgL[i] += _bgRate * (luma[i] - _bgL[i]);
-                _bgR![i] += _bgRate * (red[i] - _bgR[i]);
-                _bgG![i] += _bgRate * (green[i] - _bgG[i]);
-                _bgB![i] += _bgRate * (blue[i] - _bgB[i]);
+                _bgL[i] += BgRate * (luma[i] - _bgL[i]);
+                _bgR![i] += BgRate * (red[i] - _bgR[i]);
+                _bgG![i] += BgRate * (green[i] - _bgG[i]);
+                _bgB![i] += BgRate * (blue[i] - _bgB[i]);
             }
         }
         return sal;
@@ -195,4 +207,9 @@ public sealed class ObjectAttention
         foreach (var x in v) s += x;
         return s / v.Length;
     }
+
+    // Crude, tone-agnostic-ish skin likelihood: human skin reflects more red than blue and is ordered
+    // R>G>B across tones. Higher for redder-ordered pixels. Enough to down-weight face/arm vs a mug.
+    private static float Skin(float r, float g, float b)
+        => r > g && g >= b ? Math.Clamp((r - b) * 3f, 0f, 1f) : 0f;
 }

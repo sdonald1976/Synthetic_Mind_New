@@ -36,6 +36,11 @@ public sealed class MindEngine
     public int RecallSupport { get; set; } = 4;
     public volatile bool Paused;
 
+    /// <summary>Novelty spike needed to glance away from the person; lower = glances more readily.</summary>
+    public float GlanceTrigger { get => _attention.GlanceTrigger; set => _attention.GlanceTrigger = value; }
+    /// <summary>0..1: down-weight skin so a non-skin object can beat a face/arm for attention.</summary>
+    public float SkinSuppress { get => _attention.SkinSuppress; set => _attention.SkinSuppress = value; }
+
     public int WordCount => _wordVq.Count;
     public int ObjectCount => _objectVq.Count;
     public int Bindings => _binder.Episodes;
@@ -156,7 +161,7 @@ public sealed class MindEngine
     {
         Log?.Invoke("opening webcam...");
         VideoCapture? cam = null;
-        for (var dev = 1; dev <= 2; dev++)
+        for (var dev = 0; dev <= 2; dev++)
         {
             try { cam?.Dispose(); cam = new VideoCapture(dev); } catch (Exception ex) { Log?.Invoke($"  device {dev}: {ex.Message}"); continue; }
             if (cam.IsOpened()) { Log?.Invoke($"webcam opened (device {dev})."); break; }

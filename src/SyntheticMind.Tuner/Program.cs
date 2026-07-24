@@ -25,8 +25,10 @@ sealed class Tuner : Form
     private readonly PictureBox _view = new() { Dock = DockStyle.Fill, BackColor = Color.Black, SizeMode = PictureBoxSizeMode.Normal };
     private readonly TextBox _transcript = new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, BackColor = Color.FromArgb(20, 22, 26), ForeColor = Color.Gainsboro, Font = new Font("Consolas", 9), BorderStyle = BorderStyle.None };
     private readonly TextBox _source = new() { Width = 420, Text = "temp" };
-    private readonly TrackBar _cooldown = new() { Minimum = 30, Maximum = 1500, Value = 300, Width = 160, TickFrequency = 300 };
-    private readonly TrackBar _support = new() { Minimum = 2, Maximum = 20, Value = 4, Width = 120, TickFrequency = 2 };
+    private readonly TrackBar _cooldown = new() { Minimum = 30, Maximum = 1500, Value = 300, Width = 130, TickFrequency = 300 };
+    private readonly TrackBar _support = new() { Minimum = 2, Maximum = 20, Value = 4, Width = 90, TickFrequency = 2 };
+    private readonly TrackBar _glance = new() { Minimum = 10, Maximum = 40, Value = 25, Width = 110, TickFrequency = 5 };   // GlanceTrigger = value/10 (low = glances more)
+    private readonly TrackBar _skin = new() { Minimum = 0, Maximum = 100, Value = 0, Width = 110, TickFrequency = 25 };      // SkinSuppress = value/100
     private readonly Label _knobs = new() { AutoSize = true, ForeColor = Color.Gainsboro };
     private readonly Label _counters = new() { AutoSize = true, ForeColor = Color.DarkSeaGreen };
     private readonly Button _pause = new() { Text = "Pause", Width = 70 };
@@ -66,10 +68,13 @@ sealed class Tuner : Form
         _pause.Click += (_, _) => { if (_engine is { } e) { e.Paused = !e.Paused; _pause.Text = e.Paused ? "Resume" : "Pause"; } };
         _cooldown.Scroll += (_, _) => ApplyKnobs();
         _support.Scroll += (_, _) => ApplyKnobs();
+        _glance.Scroll += (_, _) => ApplyKnobs();
+        _skin.Scroll += (_, _) => ApplyKnobs();
 
         foreach (Control c in new Control[] {
             L("source:"), _source, watch, liveBtn, fetch, stop, _pause,
-            L("   speak-gap:"), _cooldown, L("recall-support:"), _support, _knobs, _counters })
+            L(" speak-gap:"), _cooldown, L("support:"), _support,
+            L("glance-thresh:"), _glance, L("ignore-skin:"), _skin, _knobs, _counters })
             bar.Controls.Add(c);
 
         Controls.Add(split);
@@ -84,8 +89,12 @@ sealed class Tuner : Form
 
     private void ApplyKnobs()
     {
-        if (_engine is { } e) { e.SpeakCooldownTicks = _cooldown.Value; e.RecallSupport = _support.Value; }
-        _knobs.Text = $"  gap {_cooldown.Value} · support {_support.Value}";
+        if (_engine is { } e)
+        {
+            e.SpeakCooldownTicks = _cooldown.Value; e.RecallSupport = _support.Value;
+            e.GlanceTrigger = _glance.Value / 10f; e.SkinSuppress = _skin.Value / 100f;
+        }
+        _knobs.Text = $"  gap {_cooldown.Value} · support {_support.Value} · glance {_glance.Value / 10f:F1} · skin {_skin.Value}%";
     }
 
     // Must be called on the UI thread — it reads the knob controls before handing off to the engine thread.
@@ -96,9 +105,11 @@ sealed class Tuner : Form
         var stateDir = MindPaths.State;   // repo-root/mind-state — findable, and shared with the console mind
         var cooldown = _cooldown.Value;   // read UI controls HERE, on the UI thread
         var support = _support.Value;
+        var glance = _glance.Value / 10f;
+        var skin = _skin.Value / 100f;
         _thread = new Thread(() =>
         {
-            _engine = new MindEngine(stateDir) { SpeakCooldownTicks = cooldown, RecallSupport = support };
+            _engine = new MindEngine(stateDir) { SpeakCooldownTicks = cooldown, RecallSupport = support, GlanceTrigger = glance, SkinSuppress = skin };
             _engine.Log += Log;
             _engine.Perceived += p => { lock (_gate) { _latest = p; _hasFrame = true; } };
             driver();
