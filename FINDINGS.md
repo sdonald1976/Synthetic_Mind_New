@@ -4,6 +4,31 @@ The experiment log. One entry per real result, newest first. Numbers with dates,
 
 ---
 
+## 048 — Attention grows up: skin-suppression, teaching, and sound-directed gaze (live-tuned)
+*2026-07-24 · `SyntheticMind` + tuner · human-in-the-loop, validated live on a webcam*
+
+The tuning window turned attention from a fixed guess into something you *watch, tune, and teach* in real time — and that changed how progress happens: not a batch run and a number, but a person sitting at the camera saying "it's stuck on my face" and turning a knob. Three attention improvements came out of one live session, each confirmed by eye:
+
+- **Skin-suppression (finding of the session).** Person-centred attention fixated on the face and, when it looked away, jumped to the bare *arm* — driven by size + skin-colour. Down-weighting skin-toned pixels (crude R>G>B) by a live slider fixed it; **~25%** was the sweet spot the user found — enough that a mug beats an arm, little enough it still rests on the person. Baked in as default. (Caveat: the crude rule also dims red objects, so it's deliberately mild.)
+- **Teach-focus — joint attention made literal.** Pause, drag a box over a thing, "Teach focus": it captures that region's fovea signature and gets *pulled* toward matching regions after. Honest limit found live: the pull only tests the already-salient cells, so it can't yet rescue a *non-salient* taught object — the fix is to scan a grid of positions, not just the salient ones.
+- **Audio-visual correspondence — and it worked.** Correlate each region's motion with the sound envelope over ~1 s; attend to the region moving *in sync with the sound* — a mouth when talking. Live result, in the user's words: *"it was looking at a bottle and a mug, and when I said stuff it refocused on me."* Objects when quiet, the **speaker when talking** — automatic, no pointing.
+
+### Why the sound cue matters most
+
+It isn't just another way to steer the box. When attention locks onto the mouth *because* that's what's moving with the sound, the object-unit it forms is "the thing that moved when the word happened" — and it binds *that* to the word. So audio-visual correspondence **grounds the word to the speaker's mouth**, exactly where word-learning should anchor. The user's instinct joined two mechanisms that belong together.
+
+### Honest limits
+
+- Sound-gaze needs the source **visibly moving in frame**; off-screen or motionless sources give nothing to correlate. Mono envelope (not stereo direction), so with two things moving in time it can pick wrong.
+- Teach-pull is salient-cells-only (above); taught signatures aren't persisted (session-only).
+- All of it rides the same coarse 120×90 eye — these are better *policies* for where to look, not a sharper look.
+
+### What this session really showed
+
+The tuner earned its keep. Every one of these was a hypothesis → a knob (or a click) → the user's eyes settling it in seconds. That human-in-the-loop loop is the right instrument for the "sharpness/where-to-look" frontier — faster and truer than guessing at constants and re-running batches.
+
+---
+
 ## 047 — Top-down doesn't pay rent in the coarse mind — so it stays out
 *2026-07-22 · `SyntheticMind` · a graduation attempt that honestly failed, and why that's the right call*
 
