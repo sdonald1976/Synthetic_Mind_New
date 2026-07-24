@@ -147,6 +147,8 @@ public sealed class MindEngine
 
         Waking();
         Log?.Invoke($"awake. watching {videos.Length} video(s) in {folder} on a loop.");
+        if (!FfmpegAvailable())
+            Log?.Invoke("⚠ ffmpeg not found on PATH — I can SEE these videos but not HEAR them (audio is ripped with ffmpeg). 'heard' will stay 0 and no words/bindings will form. Fix: winget install ffmpeg, then relaunch.");
         while (_alive)
         {
             foreach (var video in videos)
@@ -361,6 +363,21 @@ public sealed class MindEngine
             if (v > best) best = v;
         }
         return best;
+    }
+
+    /// <summary>Probe once whether ffmpeg is on PATH, so a missing-ffmpeg machine gets a clear warning
+    /// (audio extraction needs it) instead of silently sitting at "heard 0".</summary>
+    private static bool FfmpegAvailable()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("ffmpeg", "-version")
+            { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
+            using var p = Process.Start(psi); if (p is null) return false;
+            p.WaitForExit();
+            return true;
+        }
+        catch { return false; }
     }
 
     private static float[] ExtractAudio(string video, int rate)
