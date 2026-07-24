@@ -29,6 +29,7 @@ sealed class Tuner : Form
     private readonly TrackBar _support = new() { Minimum = 2, Maximum = 20, Value = 4, Width = 90, TickFrequency = 2 };
     private readonly TrackBar _glance = new() { Minimum = 10, Maximum = 40, Value = 25, Width = 110, TickFrequency = 5 };   // GlanceTrigger = value/10 (low = glances more)
     private readonly TrackBar _skin = new() { Minimum = 0, Maximum = 100, Value = 25, Width = 110, TickFrequency = 25 };     // SkinSuppress = value/100 (live-tuned default)
+    private readonly TrackBar _speed = new() { Minimum = 10, Maximum = 400, Value = 100, Width = 110, TickFrequency = 90 };  // PlaybackSpeed = value/100
     private readonly Label _knobs = new() { AutoSize = true, ForeColor = Color.Gainsboro };
     private readonly Label _counters = new() { AutoSize = true, ForeColor = Color.DarkSeaGreen };
     private readonly Button _pause = new() { Text = "Pause", Width = 70 };
@@ -84,6 +85,7 @@ sealed class Tuner : Form
         _support.Scroll += (_, _) => ApplyKnobs();
         _glance.Scroll += (_, _) => ApplyKnobs();
         _skin.Scroll += (_, _) => ApplyKnobs();
+        _speed.Scroll += (_, _) => ApplyKnobs();
 
         // Drag on the preview to frame a thing: empty → draw new; inside → move; near bottom-right → resize.
         _view.MouseDown += (_, e) =>
@@ -105,7 +107,7 @@ sealed class Tuner : Form
         foreach (Control c in new Control[] {
             L("source:"), _source, watch, liveBtn, fetch, stop, _pause, teach,
             L(" speak-gap:"), _cooldown, L("support:"), _support,
-            L("glance-thresh:"), _glance, L("ignore-skin:"), _skin, _knobs, _counters })
+            L("glance-thresh:"), _glance, L("ignore-skin:"), _skin, L("speed:"), _speed, _knobs, _counters })
             bar.Controls.Add(c);
 
         Controls.Add(split);
@@ -132,8 +134,9 @@ sealed class Tuner : Form
         {
             e.SpeakCooldownTicks = _cooldown.Value; e.RecallSupport = _support.Value;
             e.GlanceTrigger = _glance.Value / 10f; e.SkinSuppress = _skin.Value / 100f;
+            e.PlaybackSpeed = _speed.Value / 100f;
         }
-        _knobs.Text = $"  gap {_cooldown.Value} · support {_support.Value} · glance {_glance.Value / 10f:F1} · skin {_skin.Value}%";
+        _knobs.Text = $"  gap {_cooldown.Value} · support {_support.Value} · glance {_glance.Value / 10f:F1} · skin {_skin.Value}% · speed {_speed.Value / 100f:F1}x";
     }
 
     // Must be called on the UI thread — it reads the knob controls before handing off to the engine thread.
@@ -146,9 +149,10 @@ sealed class Tuner : Form
         var support = _support.Value;
         var glance = _glance.Value / 10f;
         var skin = _skin.Value / 100f;
+        var speed = _speed.Value / 100f;
         _thread = new Thread(() =>
         {
-            _engine = new MindEngine(stateDir) { SpeakCooldownTicks = cooldown, RecallSupport = support, GlanceTrigger = glance, SkinSuppress = skin };
+            _engine = new MindEngine(stateDir) { SpeakCooldownTicks = cooldown, RecallSupport = support, GlanceTrigger = glance, SkinSuppress = skin, PlaybackSpeed = speed };
             _engine.Log += Log;
             _engine.Perceived += p => { lock (_gate) { _latest = p; _hasFrame = true; } };
             driver();

@@ -40,6 +40,8 @@ public sealed class MindEngine
     public float GlanceTrigger { get => _attention.GlanceTrigger; set => _attention.GlanceTrigger = value; }
     /// <summary>0..1: down-weight skin so a non-skin object can beat a face/arm for attention.</summary>
     public float SkinSuppress { get => _attention.SkinSuppress; set => _attention.SkinSuppress = value; }
+    /// <summary>Video playback speed (1 = real-time). Paces RunWorld so you can slow it down to teach.</summary>
+    public float PlaybackSpeed { get; set; } = 1f;
 
     public int WordCount => _wordVq.Count;
     public int ObjectCount => _objectVq.Count;
@@ -55,7 +57,6 @@ public sealed class MindEngine
     private readonly FormantSynth _synth;
     private readonly VocalBabbler _mouth;
     private readonly Dictionary<int, float[]> _soundMemory = new();
-    private readonly List<float[]> _taught = new();   // "look here" demonstrations (Stage 1: captured)
 
     // perception working state
     private readonly float[] _buf = new float[Fft];
@@ -120,8 +121,8 @@ public sealed class MindEngine
         var w = Math.Clamp((int)(nw * CamW), 2, CamW - x0);
         var h = Math.Clamp((int)(nh * CamH), 2, CamH - y0);
         var feat = _attention.Describe(_luma, _red, _green, _blue, CamW, x0, y0, w, h);
-        _taught.Add(feat);
-        Log?.Invoke($"taught 'look here' #{_taught.Count}: region [{x0},{y0} {w}x{h}] → {feat.Length}-dim example captured.");
+        _attention.LearnFocus(feat);
+        Log?.Invoke($"taught 'look here' → now watching for {_attention.TaughtCount} kind(s) of thing; it'll get pulled toward regions like this.");
     }
 
     // --- drivers ----------------------------------------------------------------------------------
@@ -149,6 +150,7 @@ public sealed class MindEngine
                 _seg = new WordSegmenter(MelBands); _hopFill = 0; _ringCount = 0; _ringPos = 0;
                 using var frame = new Mat();
                 var samplePos = 0; var frameIndex = 0;
+                var swStart = Environment.TickCount64;   // wall clock at this video's start, for pacing
 
                 while (_alive)
                 {
@@ -160,10 +162,20 @@ public sealed class MindEngine
                     if (!doFrame) continue;
 
                     SeeFrame(frame);
-                    var target = Math.Min(samples.Length, (int)(cap.Get(VideoCaptureProperties.PosMsec) / 1000.0 * SampleRate));
+                    var tMs = cap.Get(VideoCaptureProperties.PosMsec);
+                    var target = Math.Min(samples.Length, (int)(tMs / 1000.0 * SampleRate));
                     if (target > samplePos) { HearBlock(samples.AsSpan(samplePos, target - samplePos)); samplePos = target; }
                     MaybeSpeak();
                     if (++_tick % 2000 == 0) { Status(); Remember(); }
+
+                    // Pace to real-time × (1/PlaybackSpeed) so it can be slowed down for teaching.
+                    var speed = PlaybackSpeed;
+                    if (speed > 0.01f)
+                    {
+                        var targetWall = swStart + (long)(tMs / speed);
+                        for (var wait = targetWall - Environment.TickCount64; wait > 0 && _alive && !Paused; wait = targetWall - Environment.TickCount64)
+                            Thread.Sleep((int)Math.Min(50, wait));
+                    }
                 }
             }
             videos = Scan();   // re-scan so a still-downloading playlist's new videos get picked up

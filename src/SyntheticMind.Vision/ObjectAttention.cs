@@ -44,6 +44,7 @@ public sealed class ObjectAttention
     private float _novBaseline;
     private bool _novInit;
     private int _glanceLeft;                  // frames remaining in the current glance
+    private readonly List<float[]> _taughtProtos = new();   // normalized signatures of things you taught it to look at
 
     public ObjectAttention(Retina fovea, int coarseX = 16, int coarseY = 12, float windowFrac = 0.5f,
         AttentionMode mode = AttentionMode.Saliency, float bgRate = 0.03f,
@@ -73,6 +74,80 @@ public sealed class ObjectAttention
         return _fovea.Process(cl, w, h, cr, cg, cb);
     }
 
+    /// <summary>How many distinct "look here" things you've taught it.</summary>
+    public int TaughtCount => _taughtProtos.Count;
+
+    /// <summary>Learn a taught region (Stage 2): store its normalised signature, or refine an existing
+    /// one if it's the same kind of thing — so pointing at the mug several times sharpens one "mug"
+    /// signature rather than making many. Attention then gets pulled toward regions that match.</summary>
+    public void LearnFocus(float[] features)
+    {
+        var u = Unit(features);
+        var best = -1; var bestSim = -1f;
+        for (var i = 0; i < _taughtProtos.Count; i++) { var s = Dot(u, _taughtProtos[i]); if (s > bestSim) { bestSim = s; best = i; } }
+        if (best >= 0 && bestSim > 0.85f)
+        {
+            var p = _taughtProtos[best];
+            for (var j = 0; j < p.Length; j++) p[j] = 0.8f * p[j] + 0.2f * u[j];
+            Renorm(p);
+        }
+        else if (_taughtProtos.Count < 16) _taughtProtos.Add(u);
+    }
+
+    private float TaughtScore(float[] features)   // best cosine similarity to any taught thing (0 if none)
+    {
+        if (_taughtProtos.Count == 0) return 0f;
+        var u = Unit(features);
+        var best = 0f;
+        foreach (var p in _taughtProtos) best = MathF.Max(best, Dot(u, p));
+        return best;
+    }
+
+    // Stage 3: of the most salient/novel candidate cells, the one whose region best matches a taught
+    // thing (above a similarity floor) — or -1 if nothing you taught it is clearly in view.
+    private int BestTaughtCell(float[] luma, float[] red, float[] green, float[] blue, int width, int height, float[] sal, float[] nov)
+    {
+        Span<int> top = stackalloc int[6];
+        Span<float> topv = stackalloc float[6];
+        top.Fill(-1); topv.Fill(-1f);
+        for (var c = 0; c < sal.Length; c++)
+        {
+            var v = sal[c] + nov[c];
+            for (var k = 0; k < 6; k++) if (v > topv[k]) { for (var j = 5; j > k; j--) { topv[j] = topv[j - 1]; top[j] = top[j - 1]; } topv[k] = v; top[k] = c; break; }
+        }
+        var best = -1; var bestScore = 0.7f;   // similarity floor to count as "a taught thing is here"
+        foreach (var cell in top)
+        {
+            if (cell < 0) continue;
+            var (x0, y0, wW, hH) = CellWindow(cell, width, height);
+            var s = TaughtScore(Describe(luma, red, green, blue, width, x0, y0, wW, hH));
+            if (s > bestScore) { bestScore = s; best = cell; }
+        }
+        return best;
+    }
+
+    private (int X0, int Y0, int W, int H) CellWindow(int cell, int width, int height)
+    {
+        var pcx = (cell % _coarseX + 0.5f) / _coarseX * width;
+        var pcy = (cell / _coarseX + 0.5f) / _coarseY * height;
+        var wW = Math.Max(4, (int)(width * WindowFrac));
+        var hH = Math.Max(4, (int)(height * WindowFrac));
+        return (Math.Clamp((int)(pcx - wW / 2f), 0, width - wW), Math.Clamp((int)(pcy - hH / 2f), 0, height - hH), wW, hH);
+    }
+
+    private static float[] Unit(float[] v)
+    {
+        var n = 0f; foreach (var x in v) n += x * x; n = MathF.Sqrt(n);
+        var u = new float[v.Length]; if (n > 1e-9f) for (var i = 0; i < v.Length; i++) u[i] = v[i] / n;
+        return u;
+    }
+    private static void Renorm(float[] v)
+    {
+        var n = 0f; foreach (var x in v) n += x * x; n = MathF.Sqrt(n);
+        if (n > 1e-9f) for (var i = 0; i < v.Length; i++) v[i] /= n;
+    }
+    private static float Dot(float[] a, float[] b) { var s = 0f; for (var i = 0; i < a.Length; i++) s += a[i] * b[i]; return s; }
+
     public (float[] Features, int X0, int Y0, int W, int H) Attend(
         float[] luma, float[] red, float[] green, float[] blue, int width, int height)
     {
@@ -89,7 +164,15 @@ public sealed class ObjectAttention
             if (!_novInit) { _novBaseline = novStrength; _novInit = true; }
             if (!_anchorInit) { _anchorX = salPeak % _coarseX; _anchorY = salPeak / _coarseX; _anchorInit = true; }
 
-            if (_glanceLeft > 0)
+            // Stage 3 — taught pull: if something you taught it to look at is clearly in view, go there.
+            var taughtCell = _taughtProtos.Count > 0 ? BestTaughtCell(luma, red, green, blue, width, height, sal, nov) : -1;
+
+            if (taughtCell >= 0)
+            {
+                focus = taughtCell;          // a taught thing wins over the usual anchor/glance
+                _glanceLeft = _glanceFrames;
+            }
+            else if (_glanceLeft > 0)
             {
                 _glanceLeft--;               // keep looking at the thing it glanced to
                 focus = novPeak;
