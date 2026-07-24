@@ -19,6 +19,10 @@ public sealed class WordSegmenter
     private float _floor;                 // running noise floor (quiet energy)
     private bool _floorInit;              // seed the floor from the first hop, not a guessed constant
     private float[] _acc;                 // mel accumulator over the current voiced run
+
+    /// <summary>Minimum voicing (harmonicity in the human-voice pitch range) for a hop to count as
+    /// speech — the voice gate. 0 = accept any loud sound (music, effects); higher = voice only.</summary>
+    public float MinVoicing { get; set; }
     private int _voiced;                  // hops of voice in the current run
     private int _silence;                 // trailing silence hops since voice
     private bool _inWord;
@@ -41,12 +45,15 @@ public sealed class WordSegmenter
 
     /// <summary>Feed one hop (its mel and its short-time energy). Returns the completed word's mean
     /// mel when a voiced run just ended at word length, else null.</summary>
-    public float[]? Accept(float[] mel, float energy)
+    /// <param name="voicing">0..1 harmonicity (voice-range pitch strength); the voice gate rejects a
+    /// hop whose voicing is below <see cref="MinVoicing"/>. Default 1 accepts everything.</param>
+    public float[]? Accept(float[] mel, float energy, float voicing = 1f)
     {
         if (!_floorInit) { _floor = MathF.Max(energy, 1e-6f); _floorInit = true; }   // seed from ambient
         if (energy < _floor) _floor = energy;                    // snap down to any new quiet minimum
-        var voiced = energy > _floor * _activate;
-        if (!voiced) _floor += _floorRate * (energy - _floor);   // adapt the floor up slowly in quiet
+        var loud = energy > _floor * _activate;
+        if (!loud) _floor += _floorRate * (energy - _floor);     // adapt the floor up slowly in quiet
+        var voiced = loud && voicing >= MinVoicing;              // speech = loud AND voice-like
 
         if (voiced)
         {

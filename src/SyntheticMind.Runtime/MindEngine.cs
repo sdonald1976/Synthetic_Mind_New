@@ -45,6 +45,8 @@ public sealed class MindEngine
     public float PlaybackSpeed { get; set; } = 1f;
     /// <summary>Motion↔sound correlation needed to look at the sound source (audio-visual correspondence).</summary>
     public float AvThreshold { get => _attention.AvThreshold; set => _attention.AvThreshold = value; }
+    /// <summary>Voice gate: only learn/segment audio this voice-like (filters music, effects, noise).</summary>
+    public float VoiceGate { get => _voiceGate; set { _voiceGate = value; _seg.MinVoicing = value; } }
 
     public int WordCount => _wordVq.Count;
     public int ObjectCount => _objectVq.Count;
@@ -70,6 +72,7 @@ public sealed class MindEngine
     private float _audioBaseline = 1e-4f;
     private float _recentAudioEnergy;      // rolling sound level, for audio-visual correspondence
     private int _currentObject = -1;
+    private float _voiceGate = 0.35f;      // voice-only by default so it learns words, not music
     private WordSegmenter _seg = new(MelBands);
     private long _tick, _spoken, _wordsHeard, _lastSpeakTick = -10000;
 
@@ -104,6 +107,7 @@ public sealed class MindEngine
         _binder = CrossSituationalBinder.LoadOrNew(_pairingsPath);
         if (File.Exists(_taughtPath))
             try { var t = JsonSerializer.Deserialize<float[][]>(File.ReadAllText(_taughtPath)); if (t is not null) _attention.ImportTaught(t); } catch { }
+        _seg.MinVoicing = _voiceGate;
 
         _synth = new FormantSynth(SampleRate);
         _mouth = new VocalBabbler(TrajKeys * _synth.ControlCount, TrajFrames * MelBands,
@@ -151,7 +155,7 @@ public sealed class MindEngine
                 var samples = ExtractAudio(video, SampleRate);
                 using var cap = new VideoCapture(video);
                 if (!cap.IsOpened()) continue;
-                _seg = new WordSegmenter(MelBands); _hopFill = 0; _ringCount = 0; _ringPos = 0;
+                _seg = new WordSegmenter(MelBands) { MinVoicing = _voiceGate }; _hopFill = 0; _ringCount = 0; _ringPos = 0;
                 using var frame = new Mat();
                 var samplePos = 0; var frameIndex = 0;
                 var lastWall = Environment.TickCount64; var lastTMs = 0.0;   // for per-frame delta pacing
@@ -292,7 +296,7 @@ public sealed class MindEngine
             var s = _audioL0.Observe(mel).SquaredError;
             _audioBaseline += 0.001f * (s - _audioBaseline);
             _recentAudioEnergy += 0.4f * (energy - _recentAudioEnergy);   // track the sound envelope
-            var word = _seg.Accept(mel, energy);
+            var word = _seg.Accept(mel, energy, Voicing(_buf));           // voice-gated: speech, not music
             if (word is null) continue;
 
             var wu = _wordVq.Quantize(word);
@@ -340,6 +344,23 @@ public sealed class MindEngine
             Array.Copy(mel, 0, traj, f * MelBands, MelBands);
         }
         return traj;
+    }
+
+    // Voicing = harmonicity in the human-voice pitch range (~80–355 Hz): the peak normalized
+    // autocorrelation over voice-pitch lags. High for voiced speech, low for noise/percussion/silence.
+    private static float Voicing(float[] buf)
+    {
+        var e0 = 1e-9f;
+        foreach (var s in buf) e0 += s * s;
+        var best = 0f;
+        for (var lag = 45; lag <= 200; lag++)   // 16 kHz: lag 45→355 Hz, 200→80 Hz
+        {
+            var ac = 0f;
+            for (var i = 0; i + lag < buf.Length; i++) ac += buf[i] * buf[i + lag];
+            var v = ac / e0;
+            if (v > best) best = v;
+        }
+        return best;
     }
 
     private static float[] ExtractAudio(string video, int rate)
